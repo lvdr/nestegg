@@ -22,9 +22,12 @@ impl ComputerState {
         ComputerState {memory, registers: RegisterFile{ ..Default::default()}}
     }
 
-    pub fn step(&mut self, steps: u32) {
-        for _ in 0..steps {
-            // TODO: DODO
-        }
+    pub fn step(mut self) -> Self {
+        // TODO actually fill this
+        self
+    }
+
+    pub fn multiple_steps(mut self, steps: u32) -> Self {
+        (0..steps).fold(self, |state, _| state.step())
     }
 }
