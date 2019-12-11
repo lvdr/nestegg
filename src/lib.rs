@@ -2,7 +2,7 @@ use std::vec::Vec;
 
 mod instruction;
 
-use instruction::{Instruction, decode_instruction};
+use instruction::decode_instruction;
 use instruction::operand_mode::OperandMode;
 use instruction::operation::Operation;
 
@@ -116,21 +116,28 @@ impl ComputerState {
        }
     }
 
-    pub fn step(mut self) -> Self {
+    fn execute_operation(&mut self, op : Operation, operand: u8) -> Result<(), &'static str> {
+        match op {
+            Operation::NOP => Ok(()),
+            _ => Err("Unimplemented operation")
+       }
+    }
+
+    pub fn step(mut self) -> Result<Self, &'static str> {
         let instruction = self.memory[self.registers.program_counter as usize];
         self.registers.program_counter += 1;
 
-        let decoded_instruction = decode_instruction(instruction).unwrap();
+        let decoded_instruction = decode_instruction(instruction)?;
 
         let operand = self.fetch_operand(decoded_instruction.0);
-        // execute instruction--> executes the instruction, changing state accordingly
-        // increment program counter
 
-        self
+        self.execute_operation(decoded_instruction.1, operand)?;
+
+        Ok(self)
     }
 
-    pub fn multiple_steps(mut self, steps: u32) -> Self {
-        (0..steps).fold(self, |state, _| state.step())
+    pub fn multiple_steps(self, steps: u32) -> Result<Self, &'static str> {
+        (0..steps).try_fold(self, |state, _| state.step())
     }
 }
 

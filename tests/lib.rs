@@ -7,6 +7,7 @@ fn smoketest() {
 
     let final_memory = ComputerState::initialize_from_image(initial_memory)
         .multiple_steps(10)
+        .unwrap()
         .memory;
 
     assert_eq!(final_memory, expected_memory);
