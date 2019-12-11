@@ -38,34 +38,41 @@ impl ComputerState {
         (high << 8) | low
     }
 
-    pub fn fetch_operand(&self, mode : OperandMode) -> (u16, u8) {
+    fn fetch_operand(&mut self, mode : OperandMode) -> u8 {
         let pc = self.registers.program_counter as usize;
         match mode {
             OperandMode::Absolute => {
                 let address = self.get_word_from_memory(pc) as usize;
                 let operand = self.get_byte_from_memory(address);
-                (2, operand)
+                self.registers.program_counter += 2;
+                operand
             },
             OperandMode::AbsoluteX => {
                 let address = self.get_word_from_memory(pc) as usize;
                 let offset = self.registers.x as usize;
                 let operand = self.get_byte_from_memory(address + offset);
-                (2, operand)
+                self.registers.program_counter += 2;
+                operand
             },
             OperandMode::AbsoluteY => {
                 let address = self.get_word_from_memory(pc) as usize;
                 let offset = self.registers.y as usize;
                 let operand = self.get_byte_from_memory(address + offset);
-                (2, operand)
+                self.registers.program_counter += 2;
+                operand
             },
-            OperandMode::Accumulator => (0, self.registers.accumulator),
-            OperandMode::Immediate => (2, self.get_byte_from_memory(pc)),
-            OperandMode::Implied => (0, 0),
+            OperandMode::Accumulator => self.registers.accumulator,
+            OperandMode::Immediate => {
+                self.registers.program_counter += 2;
+                self.get_byte_from_memory(pc)
+            },
+            OperandMode::Implied => 0,
             OperandMode::Indirect => {
                 let pointer_address = self.get_word_from_memory(pc) as usize;
                 let pointer = self.get_word_from_memory(pointer_address) as usize;
                 let operand = self.get_byte_from_memory(pointer);
-                (2, operand)
+                self.registers.program_counter += 2;
+                operand
             },
             OperandMode::IndirectX => {
                 let address = self.get_byte_from_memory(pc) as usize;
@@ -73,33 +80,38 @@ impl ComputerState {
                 let pointer_address = (address + offset) & 0xff;
                 let pointer = self.get_word_from_memory(pointer_address) as usize;
                 let operand = self.get_byte_from_memory(pointer);
-                (1, operand)
+                self.registers.program_counter += 1;
+                operand
             },
             OperandMode::IndirectY => {
                 let address = self.get_byte_from_memory(pc) as usize;
                 let pointer = self.get_word_from_memory(address) as usize;
                 let offset = self.registers.x as usize;
                 let operand = self.get_byte_from_memory(pointer + offset);
-                (1, operand)
+                self.registers.program_counter += 1;
+                operand
             },
             OperandMode::ZeroPage => {
                 let address = self.get_byte_from_memory(pc) as usize;
                 let operand = self.get_byte_from_memory(address);
-                (1, operand)
+                self.registers.program_counter += 1;
+                operand
             },
             OperandMode::ZeroPageX => {
                 let address = self.get_byte_from_memory(pc) as usize;
                 let offset = self.registers.x as usize;
                 let final_address = (address + offset) & 0xff;
                 let operand = self.get_byte_from_memory(final_address);
-                (1, operand)
+                self.registers.program_counter += 1;
+                operand
             },
             OperandMode::ZeroPageY => {
                 let address = self.get_byte_from_memory(pc) as usize;
                 let offset = self.registers.y as usize;
                 let final_address = (address + offset) & 0xff;
                 let operand = self.get_byte_from_memory(final_address);
-                (1, operand)
+                self.registers.program_counter += 1;
+                operand
             },
        }
     }
@@ -107,10 +119,10 @@ impl ComputerState {
     pub fn step(mut self) -> Self {
         let instruction = self.memory[self.registers.program_counter as usize];
         self.registers.program_counter += 1;
+
         let decoded_instruction = decode_instruction(instruction).unwrap();
 
-        let (bytes, operand) = self.fetch_operand(decoded_instruction.0);
-        self.registers.program_counter += bytes;
+        let operand = self.fetch_operand(decoded_instruction.0);
         // execute instruction--> executes the instruction, changing state accordingly
         // increment program counter
 
