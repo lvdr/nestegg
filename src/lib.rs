@@ -133,3 +133,51 @@ impl ComputerState {
         (0..steps).fold(self, |state, _| state.step())
     }
 }
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    mod test_memory {
+        use super::*;
+
+        #[test]
+        fn byte_fetching_works() {
+            const NUM_VALUES : usize = 1024;
+            let mut initial_memory = Vec::new();
+            for i in 0..NUM_VALUES {
+                let masked = (i & 0xff) as u8;
+                let inverted = masked ^ 0xff;
+                initial_memory.push(inverted);
+            }
+
+            let state = ComputerState::initialize_from_image(initial_memory.clone());
+
+            for i in  0..NUM_VALUES {
+                assert_eq!(state.get_byte_from_memory(i), initial_memory[i]);
+            }
+        }
+
+        #[test]
+        fn word_fetching_works() {
+            const NUM_VALUES : usize = 1024;
+            let mut initial_memory = Vec::new();
+            let mut expected_memory = Vec::new();
+            for i in 0..NUM_VALUES {
+                let inverted = i ^ 0xffff;
+                let masked_low = (inverted & 0xff) as u8;
+                initial_memory.push(masked_low);
+                let masked_high = ((inverted >> 8) & 0xff) as u8;
+                initial_memory.push(masked_high);
+
+                expected_memory.push(inverted as u16);
+            }
+
+            let state = ComputerState::initialize_from_image(initial_memory.clone());
+
+            for i in  0..NUM_VALUES {
+                assert_eq!(state.get_word_from_memory(i*2), expected_memory[i]);
+            }
+        }
+    }
+}
