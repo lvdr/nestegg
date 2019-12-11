@@ -4,7 +4,7 @@ pub mod operation;
 use operand_mode::OperandMode;
 use operation::Operation;
 
-pub struct Instruction(OperandMode, Operation);
+pub struct Instruction(pub OperandMode, pub Operation);
 
 pub fn decode_instruction(instruction: u8) -> Result<Instruction, &'static str> {
     match instruction {
@@ -39,7 +39,7 @@ pub fn decode_instruction(instruction: u8) -> Result<Instruction, &'static str> 
         0x10 => Ok(Instruction(OperandMode::Immediate,   Operation::BPL)),
         0x00 => Ok(Instruction(OperandMode::Implied,     Operation::BRK)),
         0x50 => Ok(Instruction(OperandMode::Immediate,   Operation::BVC)),
-        0x70 => Ok(Instruction(OperandMode::Immediate,   Operation::BVC)),
+        0x70 => Ok(Instruction(OperandMode::Immediate,   Operation::BVS)),
         0x18 => Ok(Instruction(OperandMode::Implied,     Operation::CLC)),
         0xD8 => Ok(Instruction(OperandMode::Implied,     Operation::CLD)),
         0x58 => Ok(Instruction(OperandMode::Implied,     Operation::CLI)),
@@ -62,8 +62,8 @@ pub fn decode_instruction(instruction: u8) -> Result<Instruction, &'static str> 
         0xD6 => Ok(Instruction(OperandMode::ZeroPageX,   Operation::DEC)),
         0xCE => Ok(Instruction(OperandMode::Absolute,    Operation::DEC)),
         0xDE => Ok(Instruction(OperandMode::AbsoluteX,   Operation::DEC)),
-        0xCA => Ok(Instruction(OperandMode::Implied,     Operation::DEC)),
-        0x88 => Ok(Instruction(OperandMode::Implied,     Operation::DEC)),
+        0xCA => Ok(Instruction(OperandMode::Implied,     Operation::DEX)),
+        0x88 => Ok(Instruction(OperandMode::Implied,     Operation::DEY)),
         0x49 => Ok(Instruction(OperandMode::Immediate,   Operation::EOR)),
         0x45 => Ok(Instruction(OperandMode::ZeroPage,    Operation::EOR)),
         0x55 => Ok(Instruction(OperandMode::ZeroPageX,   Operation::EOR)),
