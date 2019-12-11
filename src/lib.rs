@@ -1,5 +1,7 @@
 use std::vec::Vec;
 
+mod instruction;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct RegisterFile {
     accumulator : u8,
@@ -23,7 +25,15 @@ impl ComputerState {
     }
 
     pub fn step(mut self) -> Self {
-        // TODO actually fill this
+        let instruction = self.memory[self.registers.program_counter as usize];
+
+        // decode instruction --> get an array that has a map between
+        //                        instruction value and (operator mode, instruction)
+        // get operand        --> something that returns the operand while changing
+        //                        the state of the computer
+        // execute instruction--> executes the instruction, changing state accordingly
+        // increment program counter
+
         self
     }
 

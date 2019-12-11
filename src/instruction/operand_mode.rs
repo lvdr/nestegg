@@ -1,0 +1,17 @@
+pub enum OperandMode {
+    Absolute,
+    AbsoluteX,
+    AbsoluteY,
+    Accumulator,
+    Immediate,
+    Indirect,
+    IndirectX,
+    IndirectY,
+    Noop,
+    StackPointer,
+    X,
+    Y,
+    ZeroPage,
+    ZeroPageX,
+    ZeroPageY,
+}
