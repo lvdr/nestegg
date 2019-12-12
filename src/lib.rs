@@ -1,10 +1,12 @@
 use std::vec::Vec;
 
 mod instruction;
+mod util;
 
 use instruction::decode_instruction;
 use instruction::operand_mode::OperandMode;
 use instruction::operation::Operation;
+use util::is_negative;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct RegisterFile {
@@ -34,7 +36,6 @@ pub struct ComputerState {
     pub memory : Vec<u8>,
     pub registers : RegisterFile,
 }
-
 
 impl ComputerState {
     pub fn initialize_from_image(memory : Vec<u8>) -> ComputerState {
@@ -86,6 +87,7 @@ impl ComputerState {
     fn execute_operation(&mut self, op : Operation, operand: u8) -> Result<(), &'static str> {
         match op {
             Operation::NOP => Ok(()),
+            Operation::ADC => Ok(self.execute_add_with_carry(operand)),
             _ => Err("Unimplemented operation")
        }
     }
@@ -167,6 +169,27 @@ impl ComputerState {
             },
         }
     }
+
+    fn execute_add_with_carry(&mut self, operand: u8)
+    {
+        let carry: u16 = self.get_status_flag(StatusFlag::CARRY) as u16;
+        let accumulator: u16 = self.registers.accumulator as u16;
+
+        let mut sum: u16 = operand as u16 + carry + accumulator;
+
+        let new_carry: bool = (sum & (1 << 8)) != 0;
+        self.set_status_flag(StatusFlag::CARRY, new_carry);
+
+        sum &= 0xFF;
+
+        let byte_positive: bool = !is_negative(operand);
+        let accumulator_positive: bool = !is_negative(accumulator as u8);
+        let sum_positive: bool = !is_negative(sum as u8);
+        let overflow: bool = (byte_positive == accumulator_positive) && (sum_positive != byte_positive);
+        self.set_status_flag(StatusFlag::OVERFLOW, overflow);
+
+        self.registers.accumulator = sum as u8;
+    }
 }
 
 #[cfg(test)]
@@ -223,6 +246,16 @@ mod unit_tests {
             state.execute_operation(Operation::NOP, 0).expect("Couldn't execute NOP");
 
             assert_eq!(state_initial_registers, state.registers);
+        }
+
+        #[test]
+        fn it_executes_adc() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+
+            state.registers.accumulator = 33;
+            state.execute_operation(Operation::ADC, 24).expect("Couldn't execute ADC");
+
+            assert_eq!(state.registers.accumulator, 33 + 24);
         }
 
         #[test]
