@@ -145,11 +145,11 @@ impl ComputerState {
 mod unit_tests {
     use super::*;
 
-    mod test_memory {
+    mod describe_computer_state {
         use super::*;
 
         #[test]
-        fn byte_fetching_works() {
+        fn it_fetches_bytes() {
             const NUM_VALUES : usize = 1024;
             let mut initial_memory = Vec::new();
             for i in 0..NUM_VALUES {
@@ -166,7 +166,7 @@ mod unit_tests {
         }
 
         #[test]
-        fn word_fetching_works() {
+        fn it_fetches_words() {
             const NUM_VALUES : usize = 1024;
             let mut initial_memory = Vec::new();
             let mut expected_memory = Vec::new();
@@ -185,6 +185,16 @@ mod unit_tests {
             for i in  0..NUM_VALUES {
                 assert_eq!(state.get_word_from_memory(i*2), expected_memory[i]);
             }
+        }
+
+        #[test]
+        fn it_executes_nop_without_changing_anything() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let state_initial_registers = state.registers;
+
+            state.execute_operation(Operation::NOP, 0).expect("Couldn't execute NOP");
+
+            assert_eq!(state_initial_registers, state.registers);
         }
     }
 }
