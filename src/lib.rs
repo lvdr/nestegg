@@ -95,79 +95,107 @@ impl ComputerState {
     fn fetch_operand(&mut self, mode : OperandMode) -> u8 {
         let pc = self.registers.program_counter as usize;
         match mode {
-            OperandMode::Absolute => {
-                let address = self.get_word_from_memory(pc) as usize;
-                let operand = self.get_byte_from_memory(address);
-                self.registers.program_counter += 2;
-                operand
-            },
-            OperandMode::AbsoluteX => {
-                let address = self.get_word_from_memory(pc) as usize;
-                let offset = self.registers.x as usize;
-                let operand = self.get_byte_from_memory(address + offset);
-                self.registers.program_counter += 2;
-                operand
-            },
-            OperandMode::AbsoluteY => {
-                let address = self.get_word_from_memory(pc) as usize;
-                let offset = self.registers.y as usize;
-                let operand = self.get_byte_from_memory(address + offset);
-                self.registers.program_counter += 2;
-                operand
-            },
-            OperandMode::Accumulator => self.registers.accumulator,
-            OperandMode::Immediate => {
-                self.registers.program_counter += 2;
-                self.get_byte_from_memory(pc)
-            },
-            OperandMode::Implied => 0,
-            OperandMode::Indirect => {
-                let pointer_address = self.get_word_from_memory(pc) as usize;
-                let pointer = self.get_word_from_memory(pointer_address) as usize;
-                let operand = self.get_byte_from_memory(pointer);
-                self.registers.program_counter += 2;
-                operand
-            },
-            OperandMode::IndirectX => {
-                let address = self.get_byte_from_memory(pc) as usize;
-                let offset = self.registers.x as usize;
-                let pointer_address = (address + offset) & 0xff;
-                let pointer = self.get_word_from_memory(pointer_address) as usize;
-                let operand = self.get_byte_from_memory(pointer);
-                self.registers.program_counter += 1;
-                operand
-            },
-            OperandMode::IndirectY => {
-                let address = self.get_byte_from_memory(pc) as usize;
-                let pointer = self.get_word_from_memory(address) as usize;
-                let offset = self.registers.x as usize;
-                let operand = self.get_byte_from_memory(pointer + offset);
-                self.registers.program_counter += 1;
-                operand
-            },
-            OperandMode::ZeroPage => {
-                let address = self.get_byte_from_memory(pc) as usize;
-                let operand = self.get_byte_from_memory(address);
-                self.registers.program_counter += 1;
-                operand
-            },
-            OperandMode::ZeroPageX => {
-                let address = self.get_byte_from_memory(pc) as usize;
-                let offset = self.registers.x as usize;
-                let final_address = (address + offset) & 0xff;
-                let operand = self.get_byte_from_memory(final_address);
-                self.registers.program_counter += 1;
-                operand
-            },
-            OperandMode::ZeroPageY => {
-                let address = self.get_byte_from_memory(pc) as usize;
-                let offset = self.registers.y as usize;
-                let final_address = (address + offset) & 0xff;
-                let operand = self.get_byte_from_memory(final_address);
-                self.registers.program_counter += 1;
-                operand
-            },
+            OperandMode::Absolute => self.get_absolute_operand(),
+            OperandMode::AbsoluteX => self.get_absolute_x_operand(),
+            OperandMode::AbsoluteY => self.get_absolute_y_operand(),
+            OperandMode::Accumulator => self.get_accumulator_operand(),
+            OperandMode::Immediate => self.get_immediate_operand(),
+            OperandMode::Implied => self.get_implied_operand(),
+            OperandMode::Indirect => self.get_indirect_operand(),
+            OperandMode::IndirectX => self.get_indirect_x_operand(),
+            OperandMode::IndirectY => self.get_indirect_y_operand(),
+            OperandMode::ZeroPage => self.get_zero_page_operand(),
+            OperandMode::ZeroPageX => self.get_zero_page_x_operand(),
+            OperandMode::ZeroPageY => self.get_zero_page_y_operand(),
         }
+    }
+
+    fn get_absolute_operand(&mut self) -> u8 {
+        let address = self.get_word_from_memory(self.registers.program_counter as usize) as usize;
+        let operand = self.get_byte_from_memory(address);
+        self.registers.program_counter += 2;
+        operand
+    }
+
+    fn get_absolute_x_operand(&mut self) -> u8 {
+        let address = self.get_word_from_memory(self.registers.program_counter as usize) as usize;
+        let offset = self.registers.x as usize;
+        let operand = self.get_byte_from_memory(address + offset);
+        self.registers.program_counter += 2;
+        operand
+    }
+
+    fn get_absolute_y_operand(&mut self) -> u8 {
+        let address = self.get_word_from_memory(self.registers.program_counter as usize) as usize;
+        let offset = self.registers.y as usize;
+        let operand = self.get_byte_from_memory(address + offset);
+        self.registers.program_counter += 2;
+        operand
+    }
+
+    fn get_accumulator_operand(&mut self) -> u8 {
+        self.registers.accumulator
+    }
+
+    fn get_immediate_operand(&mut self) -> u8 {
+        self.registers.program_counter += 2;
+        self.get_byte_from_memory(self.registers.program_counter as usize)
+    }
+
+    fn get_implied_operand(&mut self) -> u8 {
+        0
+    }
+
+    fn get_indirect_operand(&mut self) -> u8 {
+        let pointer_address = self.get_word_from_memory(self.registers.program_counter as usize) as usize;
+        let pointer = self.get_word_from_memory(pointer_address) as usize;
+        let operand = self.get_byte_from_memory(pointer);
+        self.registers.program_counter += 2;
+        operand
+    }
+
+    fn get_indirect_x_operand(&mut self) -> u8 {
+        let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
+        let offset = self.registers.x as usize;
+        let pointer_address = (address + offset) & 0xff;
+        let pointer = self.get_word_from_memory(pointer_address) as usize;
+        let operand = self.get_byte_from_memory(pointer);
+        self.registers.program_counter += 1;
+        operand
+    }
+
+    fn get_indirect_y_operand(&mut self) -> u8 {
+        let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
+        let pointer = self.get_word_from_memory(address) as usize;
+        let offset = self.registers.x as usize;
+        let operand = self.get_byte_from_memory(pointer + offset);
+        self.registers.program_counter += 1;
+        operand
+    }
+
+    fn get_zero_page_operand(&mut self) -> u8 {
+        let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
+        let operand = self.get_byte_from_memory(address);
+        self.registers.program_counter += 1;
+        operand
+    }
+
+    fn get_zero_page_x_operand(&mut self) -> u8 {
+        let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
+        let offset = self.registers.x as usize;
+        let final_address = (address + offset) & 0xff;
+        let operand = self.get_byte_from_memory(final_address);
+        self.registers.program_counter += 1;
+        operand
+    }
+
+    fn get_zero_page_y_operand(&mut self) -> u8 {
+        let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
+        let offset = self.registers.y as usize;
+        let final_address = (address + offset) & 0xff;
+        let operand = self.get_byte_from_memory(final_address);
+        self.registers.program_counter += 1;
+        operand
     }
 
     fn execute_add_with_carry(&mut self, operand: u8)
