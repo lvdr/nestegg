@@ -84,10 +84,17 @@ impl ComputerState {
         self.registers.status |= (new_flag as u8) << index;
     }
 
+    fn set_accumulator_and_flags(&mut self, new_value: u8) {
+        self.set_status_flag(StatusFlag::ZERO, new_value == 0);
+        self.set_status_flag(StatusFlag::NEGATIVE, new_value & (1 << 7) != 0);
+        self.registers.accumulator = new_value;
+    }
+
     fn execute_operation(&mut self, op : Operation, operand: u8) -> Result<(), &'static str> {
         match op {
             Operation::NOP => Ok(()),
             Operation::ADC => Ok(self.execute_add_with_carry(operand)),
+            Operation::AND => Ok(self.execute_and(operand)),
             _ => Err("Unimplemented operation")
        }
     }
@@ -177,7 +184,11 @@ impl ComputerState {
         let overflow: bool = (byte_positive == accumulator_positive) && (sum_positive != byte_positive);
         self.set_status_flag(StatusFlag::OVERFLOW, overflow);
 
-        self.registers.accumulator = sum as u8;
+        self.set_accumulator_and_flags(sum as u8);
+    }
+
+    fn execute_and(&mut self, operand: u8) {
+        self.set_accumulator_and_flags(self.registers.accumulator & operand);
     }
 }
 
@@ -245,14 +256,62 @@ mod unit_tests {
             state.execute_operation(Operation::ADC, 24).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 33 + 24);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
 
             state.execute_operation(Operation::ADC, 55).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 33 + 24 + 55);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
 
             state.execute_operation(Operation::ADC, 200).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 56);
             assert!(state.get_status_flag(StatusFlag::CARRY));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+
+            state.execute_operation(Operation::ADC, 100).expect("Couldn't execute ADC");
+            assert_eq!(state.registers.accumulator, 157);
+            assert!(!state.get_status_flag(StatusFlag::CARRY));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+
+            state.execute_operation(Operation::ADC, 99).expect("Couldn't execute ADC");
+            assert_eq!(state.registers.accumulator, 0);
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+        }
+
+        #[test]
+        fn it_executes_and() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+
+            state.registers.accumulator = 0xff;
+            state.execute_operation(Operation::AND, 0x55).expect("Couldn't execute AND");
+            assert_eq!(state.registers.accumulator, 0xff & 0x55);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0xaa;
+            state.execute_operation(Operation::AND, 0xf0).expect("Couldn't execute AND");
+            assert_eq!(state.registers.accumulator, 0xa0);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0x45;
+            state.execute_operation(Operation::AND, 0x0f).expect("Couldn't execute AND");
+            assert_eq!(state.registers.accumulator, 0x45 & 0x0f);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0x55;
+            state.execute_operation(Operation::AND, 0xa0).expect("Couldn't execute AND");
+            assert_eq!(state.registers.accumulator, 0x00);
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0x01;
+            state.execute_operation(Operation::AND, 0x01).expect("Couldn't execute AND");
+            assert_eq!(state.registers.accumulator, 0x01);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
         }
 
         #[test]
