@@ -251,7 +251,7 @@ mod unit_tests {
             assert!(!state.get_status_flag(StatusFlag::CARRY));
 
             state.execute_operation(Operation::ADC, 200).expect("Couldn't execute ADC");
-            assert_eq!(state.registers.accumulator, 33 + 24 + 55 + 200);
+            assert_eq!(state.registers.accumulator, 56);
             assert!(state.get_status_flag(StatusFlag::CARRY));
         }
 
