@@ -16,6 +16,19 @@ pub struct RegisterFile {
     program_counter : u16,
 }
 
+pub enum StatusFlag
+{
+    CARRY     = 0,
+    ZERO      = 1,
+    INTERRUPT = 2,
+    DECIMAL   = 3,
+    BREAK     = 4,
+    RESERVED  = 5,
+    OVERFLOW  = 6,
+    NEGATIVE  = 7
+}
+
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct ComputerState {
     pub memory : Vec<u8>,
@@ -36,6 +49,45 @@ impl ComputerState {
         let low = self.memory[index] as u16;
         let high = self.memory[index + 1] as u16;
         (high << 8) | low
+    }
+
+    pub fn step(mut self) -> Result<Self, &'static str> {
+        let instruction = self.memory[self.registers.program_counter as usize];
+        self.registers.program_counter += 1;
+
+        let decoded_instruction = decode_instruction(instruction)?;
+
+        let operand = self.fetch_operand(decoded_instruction.0);
+
+        self.execute_operation(decoded_instruction.1, operand)?;
+
+        Ok(self)
+    }
+
+    pub fn multiple_steps(self, steps: u32) -> Result<Self, &'static str> {
+        (0..steps).try_fold(self, |state, _| state.step())
+    }
+
+    fn get_status_flag(&self, status_flag: StatusFlag) -> bool
+    {
+        let index = status_flag as u8;
+        let flag = self.registers.status >> index;
+
+        return (flag & 0x1) != 0;
+    }
+
+    fn set_status_flag(&mut self, status_flag: StatusFlag, new_flag: bool)
+    {
+        let index = status_flag as u8;
+        self.registers.status &= !(1 << index);
+        self.registers.status |= (new_flag as u8) << index;
+    }
+
+    fn execute_operation(&mut self, op : Operation, operand: u8) -> Result<(), &'static str> {
+        match op {
+            Operation::NOP => Ok(()),
+            _ => Err("Unimplemented operation")
+       }
     }
 
     fn fetch_operand(&mut self, mode : OperandMode) -> u8 {
@@ -113,31 +165,7 @@ impl ComputerState {
                 self.registers.program_counter += 1;
                 operand
             },
-       }
-    }
-
-    fn execute_operation(&mut self, op : Operation, operand: u8) -> Result<(), &'static str> {
-        match op {
-            Operation::NOP => Ok(()),
-            _ => Err("Unimplemented operation")
-       }
-    }
-
-    pub fn step(mut self) -> Result<Self, &'static str> {
-        let instruction = self.memory[self.registers.program_counter as usize];
-        self.registers.program_counter += 1;
-
-        let decoded_instruction = decode_instruction(instruction)?;
-
-        let operand = self.fetch_operand(decoded_instruction.0);
-
-        self.execute_operation(decoded_instruction.1, operand)?;
-
-        Ok(self)
-    }
-
-    pub fn multiple_steps(self, steps: u32) -> Result<Self, &'static str> {
-        (0..steps).try_fold(self, |state, _| state.step())
+        }
     }
 }
 
@@ -195,6 +223,24 @@ mod unit_tests {
             state.execute_operation(Operation::NOP, 0).expect("Couldn't execute NOP");
 
             assert_eq!(state_initial_registers, state.registers);
+        }
+
+        #[test]
+        fn it_sets_status_flags() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            state.registers.status = 0b00110011;
+            state.set_status_flag(StatusFlag::ZERO, false);
+
+            assert_eq!(state.registers.status, 0b00110001);
+        }
+
+        #[test]
+        fn it_gets_status_flags() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            state.registers.status = 0b00110011;
+
+            assert_eq!(state.get_status_flag(StatusFlag::ZERO), true);
+            assert_eq!(state.get_status_flag(StatusFlag::NEGATIVE), false);
         }
     }
 }
