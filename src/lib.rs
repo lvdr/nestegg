@@ -93,7 +93,6 @@ impl ComputerState {
     }
 
     fn fetch_operand(&mut self, mode : OperandMode) -> u8 {
-        let pc = self.registers.program_counter as usize;
         match mode {
             OperandMode::Absolute => self.get_absolute_operand(),
             OperandMode::AbsoluteX => self.get_absolute_x_operand(),
