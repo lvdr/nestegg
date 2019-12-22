@@ -37,7 +37,14 @@ pub struct ComputerState {
     pub registers : RegisterFile,
 }
 
+enum Operand {
+    Accumulator,
+    Address(u16),
+    Implied,
+}
+
 impl ComputerState {
+
     pub fn initialize_from_image(memory : Vec<u8>) -> ComputerState {
         ComputerState {memory, registers: RegisterFile{ ..Default::default()}}
     }
@@ -69,16 +76,22 @@ impl ComputerState {
         (0..steps).try_fold(self, |state, _| state.step())
     }
 
-    fn get_status_flag(&self, status_flag: StatusFlag) -> bool
-    {
+    fn get_operand_value(&self, operand: Operand) -> Result<u8, &'static str> {
+        match operand {
+            Operand::Accumulator => Ok(self.registers.accumulator),
+            Operand::Address(addr) => Ok(self.get_byte_from_memory(addr as usize)),
+            Operand::Implied => Err("Cannot get implied operand value")
+        }
+    }
+
+    fn get_status_flag(&self, status_flag: StatusFlag) -> bool {
         let index = status_flag as u8;
         let flag = self.registers.status >> index;
 
         return (flag & 0x1) != 0;
     }
 
-    fn set_status_flag(&mut self, status_flag: StatusFlag, new_flag: bool)
-    {
+    fn set_status_flag(&mut self, status_flag: StatusFlag, new_flag: bool) {
         let index = status_flag as u8;
         self.registers.status &= !(1 << index);
         self.registers.status |= (new_flag as u8) << index;
@@ -90,23 +103,23 @@ impl ComputerState {
         self.registers.accumulator = new_value;
     }
 
-    fn execute_operation(&mut self, op : Operation, operand: u8) -> Result<(), &'static str> {
+    fn execute_operation(&mut self, op : Operation, operand: Operand) -> Result<(), &'static str> {
         match op {
             Operation::NOP => Ok(()),
-            Operation::ADC => Ok(self.execute_add_with_carry(operand)),
-            Operation::AND => Ok(self.execute_and(operand)),
+            Operation::ADC => Ok(self.execute_add_with_carry(operand)?),
+            Operation::AND => Ok(self.execute_and(operand)?),
             _ => Err("Unimplemented operation")
        }
     }
 
-    fn fetch_operand(&mut self, mode : OperandMode) -> u8 {
+    fn fetch_operand(&mut self, mode : OperandMode) -> Operand {
         match mode {
             OperandMode::Absolute => self.get_absolute_operand(0),
             OperandMode::AbsoluteX => self.get_absolute_operand(self.registers.x),
             OperandMode::AbsoluteY => self.get_absolute_operand(self.registers.y),
-            OperandMode::Accumulator => self.get_accumulator_operand(),
+            OperandMode::Accumulator => Operand::Accumulator,
             OperandMode::Immediate => self.get_immediate_operand(),
-            OperandMode::Implied => 0,
+            OperandMode::Implied => Operand::Implied,
             OperandMode::Indirect => self.get_indirect_operand(),
             OperandMode::IndirectX => self.get_indirect_x_operand(),
             OperandMode::IndirectY => self.get_indirect_y_operand(),
@@ -116,79 +129,75 @@ impl ComputerState {
         }
     }
 
-    fn get_absolute_operand(&mut self, offset: u8) -> u8 {
-        let address = self.get_word_from_memory(self.registers.program_counter as usize) as usize;
-        let operand = self.get_byte_from_memory(address + offset as usize);
+    fn get_absolute_operand(&mut self, offset: u8) -> Operand {
+        let address = self.get_word_from_memory(self.registers.program_counter as usize) as u16;
         self.registers.program_counter += 2;
+        Operand::Address(address + offset as u16)
+    }
+
+    fn get_immediate_operand(&mut self) -> Operand {
+        let operand = Operand::Address(self.registers.program_counter);
+        self.registers.program_counter += 1;
         operand
     }
 
-    fn get_accumulator_operand(&mut self) -> u8 {
-        self.registers.accumulator
-    }
-
-    fn get_immediate_operand(&mut self) -> u8 {
-        self.registers.program_counter += 2;
-        self.get_byte_from_memory(self.registers.program_counter as usize)
-    }
-
-    fn get_indirect_operand(&mut self) -> u8 {
+    fn get_indirect_operand(&mut self) -> Operand {
         let pointer_address = self.get_word_from_memory(self.registers.program_counter as usize) as usize;
-        let pointer = self.get_word_from_memory(pointer_address) as usize;
-        let operand = self.get_byte_from_memory(pointer);
+        let pointer = self.get_word_from_memory(pointer_address) as u16;
         self.registers.program_counter += 2;
-        operand
+        Operand::Address(pointer)
     }
 
-    fn get_indirect_x_operand(&mut self) -> u8 {
+    fn get_indirect_x_operand(&mut self) -> Operand {
         let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
         let offset = self.registers.x as usize;
         let pointer_address = (address + offset) & 0xff;
-        let pointer = self.get_word_from_memory(pointer_address) as usize;
-        let operand = self.get_byte_from_memory(pointer);
+        let pointer = self.get_word_from_memory(pointer_address);
         self.registers.program_counter += 1;
-        operand
+        Operand::Address(pointer)
     }
 
-    fn get_indirect_y_operand(&mut self) -> u8 {
+    fn get_indirect_y_operand(&mut self) -> Operand {
         let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
-        let pointer = self.get_word_from_memory(address) as usize;
-        let offset = self.registers.x as usize;
-        let operand = self.get_byte_from_memory(pointer + offset);
+        let pointer = self.get_word_from_memory(address);
+        let offset = self.registers.x as u16;
         self.registers.program_counter += 1;
-        operand
+        Operand::Address(pointer + offset)
     }
 
-    fn get_zero_page_operand(&mut self, offset: u8) -> u8 {
-        let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
-        let final_address = (address + (offset as usize)) & 0xff;
-        let operand = self.get_byte_from_memory(final_address);
+    fn get_zero_page_operand(&mut self, offset: u8) -> Operand {
+        let address = self.get_byte_from_memory(self.registers.program_counter as usize);
+        let final_address = (address + offset) & 0xff;
         self.registers.program_counter += 1;
-        operand
+        Operand::Address(final_address as u16)
     }
 
-    fn execute_add_with_carry(&mut self, operand: u8) {
+    fn execute_add_with_carry(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
         let carry: u16 = self.get_status_flag(StatusFlag::CARRY) as u16;
         let accumulator: u16 = self.registers.accumulator as u16;
 
-        let mut sum: u16 = operand as u16 + carry + accumulator;
+        let mut sum: u16 = operand_value as u16 + carry + accumulator;
 
         let new_carry: bool = (sum & (1 << 8)) != 0;
         self.set_status_flag(StatusFlag::CARRY, new_carry);
 
         sum &= 0xFF;
 
-        let byte_positive: bool = !is_negative(operand);
+        let byte_positive: bool = !is_negative(operand_value);
         let accumulator_positive: bool = !is_negative(accumulator as u8);
         let sum_positive: bool = !is_negative(sum as u8);
         let overflow: bool = (byte_positive == accumulator_positive) && (sum_positive != byte_positive);
         self.set_status_flag(StatusFlag::OVERFLOW, overflow);
 
         self.set_accumulator_and_flags(sum as u8);
+        Ok(())
     }
 
-    fn execute_and(&mut self, operand: u8) {
-        self.set_accumulator_and_flags(self.registers.accumulator & operand);
+    fn execute_and(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        self.set_accumulator_and_flags(self.registers.accumulator & operand_value);
+        Ok(())
     }
 }
 
@@ -243,37 +252,37 @@ mod unit_tests {
             let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
             let state_initial_registers = state.registers;
 
-            state.execute_operation(Operation::NOP, 0).expect("Couldn't execute NOP");
+            state.execute_operation(Operation::NOP, Operand::Implied).expect("Couldn't execute NOP");
 
             assert_eq!(state_initial_registers, state.registers);
         }
 
         #[test]
         fn it_executes_adc() {
-            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let mut state = ComputerState::initialize_from_image(vec![24, 55, 200, 100, 99]);
 
             state.registers.accumulator = 33;
-            state.execute_operation(Operation::ADC, 24).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Address(0)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 33 + 24);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, 55).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Address(1)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 33 + 24 + 55);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, 200).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Address(2)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 56);
             assert!(state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, 100).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Address(3)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 157);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, 99).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Address(4)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 0);
             assert!(state.get_status_flag(StatusFlag::CARRY));
             assert!(state.get_status_flag(StatusFlag::ZERO));
@@ -281,34 +290,35 @@ mod unit_tests {
 
         #[test]
         fn it_executes_and() {
-            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0, 0x0f, 0xa0, 0x01]);
+
 
             state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::AND, 0x55).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Address(0)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0xff & 0x55);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0xaa;
-            state.execute_operation(Operation::AND, 0xf0).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Address(1)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0xa0);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x45;
-            state.execute_operation(Operation::AND, 0x0f).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Address(2)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0x45 & 0x0f);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x55;
-            state.execute_operation(Operation::AND, 0xa0).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Address(3)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0x00);
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x01;
-            state.execute_operation(Operation::AND, 0x01).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Address(4)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0x01);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
