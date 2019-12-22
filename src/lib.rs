@@ -125,7 +125,7 @@ impl ComputerState {
             Operation::BCC => Ok(self.execute_branch_if(operand, StatusFlag::CARRY, false)?),
             Operation::BCS => Ok(self.execute_branch_if(operand, StatusFlag::CARRY, true)?),
             Operation::BEQ => Ok(self.execute_branch_if(operand, StatusFlag::ZERO, true)?),
-            //Operation::BIT
+            Operation::BIT => Ok(self.execute_bit_test(operand)?),
             Operation::BMI => Ok(self.execute_branch_if(operand, StatusFlag::NEGATIVE, true)?),
             Operation::BNE => Ok(self.execute_branch_if(operand, StatusFlag::ZERO, false)?),
             Operation::BPL => Ok(self.execute_branch_if(operand, StatusFlag::NEGATIVE, false)?),
@@ -253,6 +253,18 @@ impl ComputerState {
             self.registers.program_counter = self.registers.program_counter
                                                  .wrapping_add(operand_value.wrapping_sub(2));
         }
+        Ok(())
+    }
+
+    fn execute_bit_test(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let bit_7 = operand_value & (1 << 7) != 0;
+        let bit_6 = operand_value & (1 << 6) != 0;
+        let and_result = self.registers.accumulator & operand_value;
+
+        self.set_status_flag(StatusFlag::NEGATIVE, bit_7);
+        self.set_status_flag(StatusFlag::OVERFLOW, bit_6);
+        self.set_status_flag(StatusFlag::ZERO, and_result == 0);
         Ok(())
     }
 }
@@ -458,6 +470,23 @@ mod unit_tests {
             state.set_status_flag(StatusFlag::NEGATIVE, false);
             state.execute_operation(Operation::BPL, Operand::Address(1)).expect("Couldn't execute BPL");
             assert_eq!(state.registers.program_counter, 0x4f);
+        }
+
+        #[test]
+        fn it_executes_bit() {
+            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0]);
+
+            state.registers.accumulator = 0x01;
+            state.execute_operation(Operation::BIT, Operand::Address(0)).expect("Couldn't execute BIT");
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(state.get_status_flag(StatusFlag::OVERFLOW));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+
+            state.registers.accumulator = 0x0f;
+            state.execute_operation(Operation::BIT, Operand::Address(1)).expect("Couldn't execute BIT");
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(state.get_status_flag(StatusFlag::OVERFLOW));
+            assert!(state.get_status_flag(StatusFlag::ZERO));
         }
 
         #[test]
