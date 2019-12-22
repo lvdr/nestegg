@@ -122,6 +122,16 @@ impl ComputerState {
             Operation::ADC => Ok(self.execute_add_with_carry(operand)?),
             Operation::AND => Ok(self.execute_and(operand)?),
             Operation::ASL => Ok(self.execute_left_shift(operand)?),
+            Operation::BCC => Ok(self.execute_branch_if(operand, StatusFlag::CARRY, false)?),
+            Operation::BCS => Ok(self.execute_branch_if(operand, StatusFlag::CARRY, true)?),
+            Operation::BEQ => Ok(self.execute_branch_if(operand, StatusFlag::ZERO, true)?),
+            //Operation::BIT
+            Operation::BMI => Ok(self.execute_branch_if(operand, StatusFlag::NEGATIVE, true)?),
+            Operation::BNE => Ok(self.execute_branch_if(operand, StatusFlag::ZERO, false)?),
+            Operation::BPL => Ok(self.execute_branch_if(operand, StatusFlag::NEGATIVE, false)?),
+            //Operation::BRK
+            Operation::BVC => Ok(self.execute_branch_if(operand, StatusFlag::OVERFLOW, false)?),
+            Operation::BVS => Ok(self.execute_branch_if(operand, StatusFlag::OVERFLOW, true)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -229,6 +239,20 @@ impl ComputerState {
         self.set_zero_and_negative_flags(result);
         self.set_operand_value(operand, result)?;
 
+        Ok(())
+    }
+
+    fn execute_branch_if(&mut self, operand: Operand, flag: StatusFlag, value: bool) -> Result<(), &'static str> {
+        if self.get_status_flag(flag) == value {
+            let mut operand_value = self.get_operand_value(operand)? as u16;
+            if operand_value > 127 {
+                // Signed eight-bit operand, decrement unsigned value with 2^8
+                operand_value = operand_value.wrapping_sub(256);
+            }
+            // Operand is advanced by 2 from fetching opcode and operand
+            self.registers.program_counter = self.registers.program_counter
+                                                 .wrapping_add(operand_value.wrapping_sub(2));
+        }
         Ok(())
     }
 }
@@ -387,6 +411,53 @@ mod unit_tests {
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(!state.get_status_flag(StatusFlag::CARRY));
+        }
+
+        #[test]
+        fn it_branches() {
+            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0, 0x0f, 0xa0, 0x01]);
+
+            state.set_status_flag(StatusFlag::OVERFLOW, false);
+            state.execute_operation(Operation::BVS, Operand::Address(0)).expect("Couldn't execute BVS");
+            assert_eq!(state.registers.program_counter, 0x00);
+
+            state.execute_operation(Operation::BVC, Operand::Address(0)).expect("Couldn't execute BVC");
+            assert_eq!(state.registers.program_counter, 0x53);
+
+            state.set_status_flag(StatusFlag::OVERFLOW, true);
+            state.execute_operation(Operation::BVS, Operand::Address(0)).expect("Couldn't execute BVS");
+            assert_eq!(state.registers.program_counter, 0xa6);
+
+            state.set_status_flag(StatusFlag::CARRY, true);
+            state.execute_operation(Operation::BCS, Operand::Address(3)).expect("Couldn't execute BCS");
+            assert_eq!(state.registers.program_counter, 0x44);
+
+            state.set_status_flag(StatusFlag::CARRY, false);
+            state.execute_operation(Operation::BCS, Operand::Address(3)).expect("Couldn't execute BCS");
+            assert_eq!(state.registers.program_counter, 0x44);
+
+            state.execute_operation(Operation::BCC, Operand::Address(1)).expect("Couldn't execute BCC");
+            assert_eq!(state.registers.program_counter, 0x32);
+
+            state.registers.status = 0x00;
+            state.set_status_flag(StatusFlag::ZERO, true);
+            state.execute_operation(Operation::BEQ, Operand::Address(1)).expect("Couldn't execute BEQ");
+            assert_eq!(state.registers.program_counter, 0x20);
+
+            state.registers.status = 0xff;
+            state.set_status_flag(StatusFlag::ZERO, false);
+            state.execute_operation(Operation::BNE, Operand::Address(0)).expect("Couldn't execute BNE");
+            assert_eq!(state.registers.program_counter, 0x73);
+
+            state.registers.status = 0x00;
+            state.set_status_flag(StatusFlag::NEGATIVE, true);
+            state.execute_operation(Operation::BMI, Operand::Address(1)).expect("Couldn't execute BMI");
+            assert_eq!(state.registers.program_counter, 0x61);
+
+            state.registers.status = 0xff;
+            state.set_status_flag(StatusFlag::NEGATIVE, false);
+            state.execute_operation(Operation::BPL, Operand::Address(1)).expect("Couldn't execute BPL");
+            assert_eq!(state.registers.program_counter, 0x4f);
         }
 
         #[test]
