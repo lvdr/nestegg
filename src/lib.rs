@@ -37,6 +37,7 @@ pub struct ComputerState {
     pub registers : RegisterFile,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Operand {
     Accumulator,
     Address(u16),
@@ -57,6 +58,10 @@ impl ComputerState {
         let low = self.memory[index] as u16;
         let high = self.memory[index + 1] as u16;
         (high << 8) | low
+    }
+
+    pub fn write_byte_to_memory(&mut self, index: usize, value: u8) {
+        self.memory[index] = value;
     }
 
     pub fn step(mut self) -> Result<Self, &'static str> {
@@ -84,6 +89,15 @@ impl ComputerState {
         }
     }
 
+    fn set_operand_value(&mut self, operand: Operand, value: u8) -> Result<(), &'static str> {
+        match operand {
+            Operand::Accumulator => self.registers.accumulator = value,
+            Operand::Address(addr) => self.write_byte_to_memory(addr as usize, value),
+            Operand::Implied => return Err("Cannot set implied operand value"),
+        }
+        Ok(())
+    }
+
     fn get_status_flag(&self, status_flag: StatusFlag) -> bool {
         let index = status_flag as u8;
         let flag = self.registers.status >> index;
@@ -97,10 +111,9 @@ impl ComputerState {
         self.registers.status |= (new_flag as u8) << index;
     }
 
-    fn set_accumulator_and_flags(&mut self, new_value: u8) {
-        self.set_status_flag(StatusFlag::ZERO, new_value == 0);
-        self.set_status_flag(StatusFlag::NEGATIVE, new_value & (1 << 7) != 0);
-        self.registers.accumulator = new_value;
+    fn set_zero_and_negative_flags(&mut self, value: u8) {
+        self.set_status_flag(StatusFlag::ZERO, value == 0);
+        self.set_status_flag(StatusFlag::NEGATIVE, value & (1 << 7) != 0);
     }
 
     fn execute_operation(&mut self, op : Operation, operand: Operand) -> Result<(), &'static str> {
@@ -108,6 +121,7 @@ impl ComputerState {
             Operation::NOP => Ok(()),
             Operation::ADC => Ok(self.execute_add_with_carry(operand)?),
             Operation::AND => Ok(self.execute_and(operand)?),
+            Operation::ASL => Ok(self.execute_left_shift(operand)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -190,13 +204,31 @@ impl ComputerState {
         let overflow: bool = (byte_positive == accumulator_positive) && (sum_positive != byte_positive);
         self.set_status_flag(StatusFlag::OVERFLOW, overflow);
 
-        self.set_accumulator_and_flags(sum as u8);
+        self.set_zero_and_negative_flags(sum as u8);
+        self.registers.accumulator = sum as u8;
+
         Ok(())
     }
 
     fn execute_and(&mut self, operand: Operand) -> Result<(), &'static str> {
         let operand_value = self.get_operand_value(operand)?;
-        self.set_accumulator_and_flags(self.registers.accumulator & operand_value);
+        let result = self.registers.accumulator & operand_value;
+
+        self.set_zero_and_negative_flags(result);
+        self.registers.accumulator = result;
+
+        Ok(())
+    }
+
+    fn execute_left_shift(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let high_bit = operand_value & (1 << 7) != 0;
+        let result = operand_value << 1;
+
+        self.set_status_flag(StatusFlag::CARRY, high_bit);
+        self.set_zero_and_negative_flags(result);
+        self.set_operand_value(operand, result)?;
+
         Ok(())
     }
 }
@@ -322,6 +354,39 @@ mod unit_tests {
             assert_eq!(state.registers.accumulator, 0x01);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+        }
+
+        #[test]
+        fn it_executes_asl() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+
+            state.registers.accumulator = 0xff;
+            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute ASL");
+            assert_eq!(state.registers.accumulator, 0xfe);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+
+            state.registers.accumulator = 0x55;
+            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute ASL");
+            assert_eq!(state.registers.accumulator, 0xaa);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::CARRY));
+
+            state.registers.accumulator = 0x80;
+            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute AND");
+            assert_eq!(state.registers.accumulator, 0x00);
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+
+            state.registers.accumulator = 0x25;
+            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute AND");
+            assert_eq!(state.registers.accumulator, 0x4a);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::CARRY));
         }
 
         #[test]
