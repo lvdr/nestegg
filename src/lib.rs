@@ -132,6 +132,13 @@ impl ComputerState {
             //Operation::BRK
             Operation::BVC => Ok(self.execute_branch_if(operand, StatusFlag::OVERFLOW, false)?),
             Operation::BVS => Ok(self.execute_branch_if(operand, StatusFlag::OVERFLOW, true)?),
+            Operation::CLC => Ok(self.set_status_flag(StatusFlag::CARRY, false)),
+            Operation::CLD => Ok(self.set_status_flag(StatusFlag::DECIMAL, false)),
+            Operation::CLI => Ok(self.set_status_flag(StatusFlag::INTERRUPT, false)),
+            Operation::CLV => Ok(self.set_status_flag(StatusFlag::OVERFLOW, false)),
+            Operation::CMP => Ok(self.execute_compare(operand, self.registers.accumulator)?),
+            Operation::CPX => Ok(self.execute_compare(operand, self.registers.x)?),
+            Operation::CPY => Ok(self.execute_compare(operand, self.registers.y)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -265,6 +272,16 @@ impl ComputerState {
         self.set_status_flag(StatusFlag::NEGATIVE, bit_7);
         self.set_status_flag(StatusFlag::OVERFLOW, bit_6);
         self.set_status_flag(StatusFlag::ZERO, and_result == 0);
+        Ok(())
+    }
+
+    fn execute_compare(&mut self, operand: Operand, register: u8) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let substract_value = register.wrapping_sub(operand_value);
+
+        self.set_zero_and_negative_flags(substract_value);
+        self.set_status_flag(StatusFlag::CARRY, register >= operand_value);
+
         Ok(())
     }
 }
@@ -487,6 +504,69 @@ mod unit_tests {
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(state.get_status_flag(StatusFlag::OVERFLOW));
             assert!(state.get_status_flag(StatusFlag::ZERO));
+        }
+
+        #[test]
+        fn it_executes_clears() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            state.registers.status = 0xff;
+
+            state.execute_operation(Operation::CLC, Operand::Implied).expect("Couldn't execute CLC");
+            assert!(!state.get_status_flag(StatusFlag::CARRY));
+
+            state.execute_operation(Operation::CLD, Operand::Implied).expect("Couldn't execute CLD");
+            assert!(!state.get_status_flag(StatusFlag::DECIMAL));
+
+            state.execute_operation(Operation::CLI, Operand::Implied).expect("Couldn't execute CLI");
+            assert!(!state.get_status_flag(StatusFlag::INTERRUPT));
+
+            state.execute_operation(Operation::CLV, Operand::Implied).expect("Couldn't execute CLV");
+            assert!(!state.get_status_flag(StatusFlag::OVERFLOW));
+        }
+
+        #[test]
+        fn it_executes_compares() {
+            let mut state = ComputerState::initialize_from_image(vec![0x00, 0x80, 0xf0, 0xfe, 0xff]);
+
+            state.registers.accumulator = 0x10;
+            state.registers.x = 0xf0;
+            state.registers.y = 0xff;
+
+            state.execute_operation(Operation::CMP, Operand::Address(0)).expect("Couldn't execute CMP");
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+            state.execute_operation(Operation::CMP, Operand::Address(1)).expect("Couldn't execute CMP");
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::CARRY));
+
+
+            state.execute_operation(Operation::CPX, Operand::Address(0)).expect("Couldn't execute CPX");
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+            state.execute_operation(Operation::CPX, Operand::Address(1)).expect("Couldn't execute CPX");
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+            state.execute_operation(Operation::CPX, Operand::Address(2)).expect("Couldn't execute CPX");
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+
+            state.execute_operation(Operation::CPY, Operand::Address(0)).expect("Couldn't execute CPY");
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+            state.execute_operation(Operation::CPY, Operand::Address(3)).expect("Couldn't execute CPY");
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
+            state.execute_operation(Operation::CPY, Operand::Address(4)).expect("Couldn't execute CPY");
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::CARRY));
         }
 
         #[test]
