@@ -143,6 +143,9 @@ impl ComputerState {
             Operation::DEX => Ok(self.execute_increment_x(true)?),
             Operation::DEY => Ok(self.execute_increment_y(true)?),
             Operation::EOR => Ok(self.execute_exclusive_or(operand)?),
+            Operation::INC => Ok(self.execute_increment(operand, false)?),
+            Operation::INX => Ok(self.execute_increment_x(false)?),
+            Operation::INY => Ok(self.execute_increment_y(false)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -332,7 +335,6 @@ impl ComputerState {
 
         Ok(())
     }
-
 
     fn execute_exclusive_or(&mut self, operand: Operand) -> Result<(), &'static str> {
         let operand_value = self.get_operand_value(operand)?;
@@ -723,6 +725,64 @@ mod unit_tests {
             assert_eq!(state.registers.accumulator, 0x0a);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+        }
+
+        #[test]
+        fn it_executes_increment() {
+            let mut state = ComputerState::initialize_from_image(vec![254]);
+            state.registers.x = 253;
+            state.registers.y = 252;
+
+            state.execute_operation(Operation::INC, Operand::Address(0)).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.get_byte_from_memory(0), 255);
+
+            state.execute_operation(Operation::INC, Operand::Address(0)).unwrap();
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.get_byte_from_memory(0), 0);
+
+            state.execute_operation(Operation::INC, Operand::Address(0)).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.get_byte_from_memory(0), 1);
+
+            state.execute_operation(Operation::INX, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.x, 254);
+
+            state.execute_operation(Operation::INX, Operand::Implied).unwrap();
+            state.execute_operation(Operation::INX, Operand::Implied).unwrap();
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.x, 0);
+
+            state.execute_operation(Operation::INX, Operand::Implied).unwrap();
+            state.execute_operation(Operation::INX, Operand::Implied).unwrap();
+            state.execute_operation(Operation::INX, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.x, 3);
+
+            state.execute_operation(Operation::INY, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.y, 253);
+
+            state.execute_operation(Operation::INY, Operand::Implied).unwrap();
+            state.execute_operation(Operation::INY, Operand::Implied).unwrap();
+            state.execute_operation(Operation::INY, Operand::Implied).unwrap();
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.y, 0);
+
+            state.execute_operation(Operation::INY, Operand::Implied).unwrap();
+            state.execute_operation(Operation::INY, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.y, 2);
         }
 
         #[test]
