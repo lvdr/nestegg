@@ -142,7 +142,7 @@ impl ComputerState {
             Operation::DEC => Ok(self.execute_increment(operand, true)?),
             Operation::DEX => Ok(self.execute_increment_x(true)?),
             Operation::DEY => Ok(self.execute_increment_y(true)?),
-            // Operation::EOR => Ok(self.execute_exclusive_or(operand)?),
+            Operation::EOR => Ok(self.execute_exclusive_or(operand)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -333,6 +333,16 @@ impl ComputerState {
         Ok(())
     }
 
+
+    fn execute_exclusive_or(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let result = self.registers.accumulator ^ operand_value;
+
+        self.set_zero_and_negative_flags(result);
+        self.registers.accumulator = result;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -677,6 +687,42 @@ mod unit_tests {
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
             assert_eq!(state.registers.y, 255);
+        }
+
+        #[test]
+        fn it_executes_eor() {
+            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0, 0x0f, 0xa0, 0x01]);
+
+
+            state.registers.accumulator = 0xff;
+            state.execute_operation(Operation::EOR, Operand::Address(0)).unwrap();
+            assert_eq!(state.registers.accumulator, 0xaa);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0x55;
+            state.execute_operation(Operation::EOR, Operand::Address(0)).unwrap();
+            assert_eq!(state.registers.accumulator, 0x00);
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0xff;
+            state.execute_operation(Operation::EOR, Operand::Address(1)).unwrap();
+            assert_eq!(state.registers.accumulator, 0x0f);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0x0f;
+            state.execute_operation(Operation::EOR, Operand::Address(1)).unwrap();
+            assert_eq!(state.registers.accumulator, 0xff);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.registers.accumulator = 0xaa;
+            state.execute_operation(Operation::EOR, Operand::Address(3)).unwrap();
+            assert_eq!(state.registers.accumulator, 0x0a);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
         }
 
         #[test]
