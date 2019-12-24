@@ -64,6 +64,37 @@ impl ComputerState {
         self.memory[index] = value;
     }
 
+    pub fn write_word_to_memory(&mut self, index: usize, value: u16) {
+        let low = (value & 0xff) as u8;
+        let high = (value >> 8) as u8;
+        self.memory[index] = low;
+        self.memory[index + 1] = high;
+    }
+
+    pub fn pop_byte_from_stack(&mut self) -> u8 {
+        let stack_address = self.registers.stack_pointer.wrapping_add(1) as usize + 0x100;
+        self.registers.stack_pointer = self.registers.stack_pointer.wrapping_add(1);
+        self.get_byte_from_memory(stack_address)
+    }
+
+    pub fn pop_word_from_stack(&mut self) -> u16 {
+        let stack_address = self.registers.stack_pointer.wrapping_add(1) as usize + 0x100;
+        self.registers.stack_pointer = self.registers.stack_pointer.wrapping_add(2);
+        self.get_word_from_memory(stack_address)
+    }
+
+    pub fn push_byte_to_stack(&mut self, value: u8) {
+        let stack_address = self.registers.stack_pointer as usize + 0x100;
+        self.write_byte_to_memory(stack_address, value);
+        self.registers.stack_pointer = self.registers.stack_pointer.wrapping_sub(1);
+    }
+
+    pub fn push_word_to_stack(&mut self, value: u16) {
+        let stack_address = self.registers.stack_pointer.wrapping_sub(1) as usize + 0x100;
+        self.write_word_to_memory(stack_address, value);
+        self.registers.stack_pointer = self.registers.stack_pointer.wrapping_sub(2);
+    }
+
     pub fn step(mut self) -> Result<Self, &'static str> {
         let instruction = self.memory[self.registers.program_counter as usize];
         self.registers.program_counter += 1;
@@ -146,6 +177,8 @@ impl ComputerState {
             Operation::INC => Ok(self.execute_increment(operand, false)?),
             Operation::INX => Ok(self.execute_increment_x(false)?),
             Operation::INY => Ok(self.execute_increment_y(false)?),
+            Operation::JMP => Ok(self.execute_jump(operand, false)?),
+            Operation::JSR => Ok(self.execute_jump(operand, true)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -342,6 +375,20 @@ impl ComputerState {
 
         self.set_zero_and_negative_flags(result);
         self.registers.accumulator = result;
+
+        Ok(())
+    }
+
+    fn execute_jump(&mut self, operand: Operand, save_ra: bool) -> Result<(), &'static str> {
+        if save_ra {
+            self.push_word_to_stack(self.registers.program_counter - 1);
+        }
+
+        let jump_address = match operand {
+            Operand::Address(a) => a,
+            _ => return Err("Jump must have Address-type operand"),
+        };
+        self.registers.program_counter = jump_address;
 
         Ok(())
     }
@@ -783,6 +830,20 @@ mod unit_tests {
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert_eq!(state.registers.y, 2);
+        }
+
+        #[test]
+        fn in_executes_jump() {
+            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            state.registers.stack_pointer = 0xff;
+
+            state.execute_operation(Operation::JMP, Operand::Address(0x55aa)).unwrap();
+            assert_eq!(state.registers.program_counter, 0x55aa);
+
+            state.execute_operation(Operation::JSR, Operand::Address(0x7777)).unwrap();
+            assert_eq!(state.registers.program_counter, 0x7777);
+            assert_eq!(state.registers.stack_pointer, 0xfd);
+            assert_eq!(state.pop_word_from_stack(), 0x55aa - 1);
         }
 
         #[test]
