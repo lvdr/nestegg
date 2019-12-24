@@ -139,6 +139,10 @@ impl ComputerState {
             Operation::CMP => Ok(self.execute_compare(operand, self.registers.accumulator)?),
             Operation::CPX => Ok(self.execute_compare(operand, self.registers.x)?),
             Operation::CPY => Ok(self.execute_compare(operand, self.registers.y)?),
+            Operation::DEC => Ok(self.execute_increment(operand, 255)?),
+            Operation::DEX => Ok(self.execute_increment_x(255)?),
+            Operation::DEY => Ok(self.execute_increment_y(255)?),
+            // Operation::EOR => Ok(self.execute_exclusive_or(operand)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -284,6 +288,35 @@ impl ComputerState {
 
         Ok(())
     }
+
+    fn execute_increment(&mut self, operand: Operand, value: u8) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let result = operand_value.wrapping_add(value);
+
+        self.set_zero_and_negative_flags(result);
+        self.set_operand_value(operand, result)?;
+
+        Ok(())
+    }
+
+    fn execute_increment_x(&mut self, value: u8) -> Result<(), &'static str> {
+        let result = self.registers.x.wrapping_add(value);
+
+        self.set_zero_and_negative_flags(result);
+        self.registers.x = result;
+
+        Ok(())
+    }
+
+    fn execute_increment_y(&mut self, value: u8) -> Result<(), &'static str> {
+        let result = self.registers.y.wrapping_add(value);
+
+        self.set_zero_and_negative_flags(result);
+        self.registers.y = result;
+
+        Ok(())
+    }
+
 }
 
 #[cfg(test)]
@@ -567,6 +600,67 @@ mod unit_tests {
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
+        }
+
+        #[test]
+        fn it_executes_decrement() {
+            let mut state = ComputerState::initialize_from_image(vec![3]);
+            state.registers.x = 4;
+            state.registers.y = 2;
+
+            state.execute_operation(Operation::DEC, Operand::Address(0)).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.get_byte_from_memory(0), 2);
+
+            state.execute_operation(Operation::DEC, Operand::Address(0)).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.get_byte_from_memory(0), 1);
+
+            state.execute_operation(Operation::DEC, Operand::Address(0)).unwrap();
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.get_byte_from_memory(0), 0);
+
+            state.execute_operation(Operation::DEC, Operand::Address(0)).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.get_byte_from_memory(0), 255);
+
+            state.execute_operation(Operation::DEX, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.x, 3);
+
+            state.execute_operation(Operation::DEX, Operand::Implied).unwrap();
+            state.execute_operation(Operation::DEX, Operand::Implied).unwrap();
+            state.execute_operation(Operation::DEX, Operand::Implied).unwrap();
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.x, 0);
+
+            state.execute_operation(Operation::DEX, Operand::Implied).unwrap();
+            state.execute_operation(Operation::DEX, Operand::Implied).unwrap();
+            state.execute_operation(Operation::DEX, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.x, 253);
+
+            state.execute_operation(Operation::DEY, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.y, 1);
+
+            state.execute_operation(Operation::DEY, Operand::Implied).unwrap();
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.y, 0);
+
+            state.execute_operation(Operation::DEY, Operand::Implied).unwrap();
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+            assert_eq!(state.registers.y, 255);
         }
 
         #[test]
