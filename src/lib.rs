@@ -139,9 +139,9 @@ impl ComputerState {
             Operation::CMP => Ok(self.execute_compare(operand, self.registers.accumulator)?),
             Operation::CPX => Ok(self.execute_compare(operand, self.registers.x)?),
             Operation::CPY => Ok(self.execute_compare(operand, self.registers.y)?),
-            Operation::DEC => Ok(self.execute_increment(operand, 255)?),
-            Operation::DEX => Ok(self.execute_increment_x(255)?),
-            Operation::DEY => Ok(self.execute_increment_y(255)?),
+            Operation::DEC => Ok(self.execute_increment(operand, true)?),
+            Operation::DEX => Ok(self.execute_increment_x(true)?),
+            Operation::DEY => Ok(self.execute_increment_y(true)?),
             // Operation::EOR => Ok(self.execute_exclusive_or(operand)?),
             _ => Err("Unimplemented operation")
        }
@@ -289,9 +289,14 @@ impl ComputerState {
         Ok(())
     }
 
-    fn execute_increment(&mut self, operand: Operand, value: u8) -> Result<(), &'static str> {
+    fn execute_increment(&mut self, operand: Operand, negate: bool) -> Result<(), &'static str> {
         let operand_value = self.get_operand_value(operand)?;
-        let result = operand_value.wrapping_add(value);
+        let result;
+        if negate {
+            result = operand_value.wrapping_sub(1);
+        } else {
+            result = operand_value.wrapping_add(1);
+        }
 
         self.set_zero_and_negative_flags(result);
         self.set_operand_value(operand, result)?;
@@ -299,8 +304,14 @@ impl ComputerState {
         Ok(())
     }
 
-    fn execute_increment_x(&mut self, value: u8) -> Result<(), &'static str> {
-        let result = self.registers.x.wrapping_add(value);
+    fn execute_increment_x(&mut self, negate: bool) -> Result<(), &'static str> {
+        let result;
+        if negate {
+            result = self.registers.x.wrapping_sub(1);
+        } else {
+            result = self.registers.x.wrapping_add(1);
+        }
+
 
         self.set_zero_and_negative_flags(result);
         self.registers.x = result;
@@ -308,8 +319,13 @@ impl ComputerState {
         Ok(())
     }
 
-    fn execute_increment_y(&mut self, value: u8) -> Result<(), &'static str> {
-        let result = self.registers.y.wrapping_add(value);
+    fn execute_increment_y(&mut self, negate: bool) -> Result<(), &'static str> {
+        let result;
+        if negate {
+            result = self.registers.y.wrapping_sub(1);
+        } else {
+            result = self.registers.y.wrapping_add(1);
+        }
 
         self.set_zero_and_negative_flags(result);
         self.registers.y = result;
