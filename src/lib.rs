@@ -179,6 +179,9 @@ impl ComputerState {
             Operation::INY => Ok(self.execute_increment_y(false)?),
             Operation::JMP => Ok(self.execute_jump(operand, false)?),
             Operation::JSR => Ok(self.execute_jump(operand, true)?),
+            Operation::LDA => Ok(self.execute_load_accumulator(operand)?),
+            Operation::LDX => Ok(self.execute_load_x(operand)?),
+            Operation::LDY => Ok(self.execute_load_y(operand)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -389,6 +392,33 @@ impl ComputerState {
             _ => return Err("Jump must have Address-type operand"),
         };
         self.registers.program_counter = jump_address;
+
+        Ok(())
+    }
+
+    fn execute_load_accumulator(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        
+        self.set_zero_and_negative_flags(operand_value);
+        self.registers.accumulator = operand_value;
+
+        Ok(())
+    }
+
+    fn execute_load_x(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        
+        self.set_zero_and_negative_flags(operand_value);
+        self.registers.x = operand_value;
+
+        Ok(())
+    }
+
+    fn execute_load_y(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        
+        self.set_zero_and_negative_flags(operand_value);
+        self.registers.y = operand_value;
 
         Ok(())
     }
@@ -845,6 +875,27 @@ mod unit_tests {
             assert_eq!(state.registers.stack_pointer, 0xfd);
             assert_eq!(state.pop_word_from_stack(), 0x55aa - 1);
         }
+
+        #[test]
+        fn it_executes_loads() {
+            let mut state = ComputerState::initialize_from_image(vec![0x55, 0x80, 0x00]);
+
+            state.execute_operation(Operation::LDA, Operand::Address(0)).unwrap();
+            assert_eq!(state.registers.accumulator, 0x55);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.execute_operation(Operation::LDX, Operand::Address(1)).unwrap();
+            assert_eq!(state.registers.x, 0x80);
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
+
+            state.execute_operation(Operation::LDY, Operand::Address(2)).unwrap();
+            assert_eq!(state.registers.y, 0x00);
+            assert!(state.get_status_flag(StatusFlag::ZERO));
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+        }
+
 
         #[test]
         fn it_sets_status_flags() {
