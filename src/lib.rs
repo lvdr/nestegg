@@ -47,6 +47,11 @@ enum Operand {
 
 impl ComputerState {
 
+    pub fn initialize() -> ComputerState {
+        ComputerState {memory: vec![0; 2usize.pow(16)],
+                       registers: RegisterFile{ ..Default::default()}}
+    }
+
     pub fn initialize_from_image(memory : Vec<u8>) -> ComputerState {
         ComputerState {memory, registers: RegisterFile{ ..Default::default()}}
     }
@@ -475,7 +480,7 @@ mod unit_tests {
 
         #[test]
         fn it_executes_nop_without_changing_anything() {
-            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let mut state = ComputerState::initialize();
             let state_initial_registers = state.registers;
 
             state.execute_operation(Operation::NOP, Operand::Implied).expect("Couldn't execute NOP");
@@ -485,30 +490,30 @@ mod unit_tests {
 
         #[test]
         fn it_executes_adc() {
-            let mut state = ComputerState::initialize_from_image(vec![24, 55, 200, 100, 99]);
+            let mut state = ComputerState::initialize();
 
             state.registers.accumulator = 33;
-            state.execute_operation(Operation::ADC, Operand::Address(0)).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Immediate(24)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 33 + 24);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, Operand::Address(1)).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Immediate(55)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 33 + 24 + 55);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, Operand::Address(2)).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Immediate(200)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 56);
             assert!(state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, Operand::Address(3)).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Immediate(100)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 157);
             assert!(!state.get_status_flag(StatusFlag::CARRY));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
-            state.execute_operation(Operation::ADC, Operand::Address(4)).expect("Couldn't execute ADC");
+            state.execute_operation(Operation::ADC, Operand::Immediate(99)).expect("Couldn't execute ADC");
             assert_eq!(state.registers.accumulator, 0);
             assert!(state.get_status_flag(StatusFlag::CARRY));
             assert!(state.get_status_flag(StatusFlag::ZERO));
@@ -516,35 +521,35 @@ mod unit_tests {
 
         #[test]
         fn it_executes_and() {
-            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0, 0x0f, 0xa0, 0x01]);
+            let mut state = ComputerState::initialize();
 
 
             state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::AND, Operand::Address(0)).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Immediate(0x55)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0xff & 0x55);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0xaa;
-            state.execute_operation(Operation::AND, Operand::Address(1)).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Immediate(0xf0)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0xa0);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x45;
-            state.execute_operation(Operation::AND, Operand::Address(2)).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Immediate(0x0f)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0x45 & 0x0f);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x55;
-            state.execute_operation(Operation::AND, Operand::Address(3)).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Immediate(0xa0)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0x00);
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x01;
-            state.execute_operation(Operation::AND, Operand::Address(4)).expect("Couldn't execute AND");
+            state.execute_operation(Operation::AND, Operand::Immediate(0x01)).expect("Couldn't execute AND");
             assert_eq!(state.registers.accumulator, 0x01);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
@@ -552,7 +557,7 @@ mod unit_tests {
 
         #[test]
         fn it_executes_asl() {
-            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let mut state = ComputerState::initialize();
 
             state.registers.accumulator = 0xff;
             state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute ASL");
@@ -585,63 +590,63 @@ mod unit_tests {
 
         #[test]
         fn it_branches() {
-            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0, 0x0f, 0xa0, 0x01]);
+            let mut state = ComputerState::initialize();
 
             state.set_status_flag(StatusFlag::OVERFLOW, false);
-            state.execute_operation(Operation::BVS, Operand::Address(0)).expect("Couldn't execute BVS");
+            state.execute_operation(Operation::BVS, Operand::Immediate(0x55)).expect("Couldn't execute BVS");
             assert_eq!(state.registers.program_counter, 0x00);
 
-            state.execute_operation(Operation::BVC, Operand::Address(0)).expect("Couldn't execute BVC");
+            state.execute_operation(Operation::BVC, Operand::Immediate(0x55)).expect("Couldn't execute BVC");
             assert_eq!(state.registers.program_counter, 0x53);
 
             state.set_status_flag(StatusFlag::OVERFLOW, true);
-            state.execute_operation(Operation::BVS, Operand::Address(0)).expect("Couldn't execute BVS");
+            state.execute_operation(Operation::BVS, Operand::Immediate(0x55)).expect("Couldn't execute BVS");
             assert_eq!(state.registers.program_counter, 0xa6);
 
             state.set_status_flag(StatusFlag::CARRY, true);
-            state.execute_operation(Operation::BCS, Operand::Address(3)).expect("Couldn't execute BCS");
+            state.execute_operation(Operation::BCS, Operand::Immediate(0xa0)).expect("Couldn't execute BCS");
             assert_eq!(state.registers.program_counter, 0x44);
 
             state.set_status_flag(StatusFlag::CARRY, false);
-            state.execute_operation(Operation::BCS, Operand::Address(3)).expect("Couldn't execute BCS");
+            state.execute_operation(Operation::BCS, Operand::Immediate(0xa0)).expect("Couldn't execute BCS");
             assert_eq!(state.registers.program_counter, 0x44);
 
-            state.execute_operation(Operation::BCC, Operand::Address(1)).expect("Couldn't execute BCC");
+            state.execute_operation(Operation::BCC, Operand::Immediate(0xf0)).expect("Couldn't execute BCC");
             assert_eq!(state.registers.program_counter, 0x32);
 
             state.registers.status = 0x00;
             state.set_status_flag(StatusFlag::ZERO, true);
-            state.execute_operation(Operation::BEQ, Operand::Address(1)).expect("Couldn't execute BEQ");
+            state.execute_operation(Operation::BEQ, Operand::Immediate(0xf0)).expect("Couldn't execute BEQ");
             assert_eq!(state.registers.program_counter, 0x20);
 
             state.registers.status = 0xff;
             state.set_status_flag(StatusFlag::ZERO, false);
-            state.execute_operation(Operation::BNE, Operand::Address(0)).expect("Couldn't execute BNE");
+            state.execute_operation(Operation::BNE, Operand::Immediate(0x55)).expect("Couldn't execute BNE");
             assert_eq!(state.registers.program_counter, 0x73);
 
             state.registers.status = 0x00;
             state.set_status_flag(StatusFlag::NEGATIVE, true);
-            state.execute_operation(Operation::BMI, Operand::Address(1)).expect("Couldn't execute BMI");
+            state.execute_operation(Operation::BMI, Operand::Immediate(0xf0)).expect("Couldn't execute BMI");
             assert_eq!(state.registers.program_counter, 0x61);
 
             state.registers.status = 0xff;
             state.set_status_flag(StatusFlag::NEGATIVE, false);
-            state.execute_operation(Operation::BPL, Operand::Address(1)).expect("Couldn't execute BPL");
+            state.execute_operation(Operation::BPL, Operand::Immediate(0xf0)).expect("Couldn't execute BPL");
             assert_eq!(state.registers.program_counter, 0x4f);
         }
 
         #[test]
         fn it_executes_bit() {
-            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0]);
+            let mut state = ComputerState::initialize();
 
             state.registers.accumulator = 0x01;
-            state.execute_operation(Operation::BIT, Operand::Address(0)).expect("Couldn't execute BIT");
+            state.execute_operation(Operation::BIT, Operand::Immediate(0x55)).expect("Couldn't execute BIT");
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(state.get_status_flag(StatusFlag::OVERFLOW));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
 
             state.registers.accumulator = 0x0f;
-            state.execute_operation(Operation::BIT, Operand::Address(1)).expect("Couldn't execute BIT");
+            state.execute_operation(Operation::BIT, Operand::Immediate(0xf0)).expect("Couldn't execute BIT");
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(state.get_status_flag(StatusFlag::OVERFLOW));
             assert!(state.get_status_flag(StatusFlag::ZERO));
@@ -667,44 +672,44 @@ mod unit_tests {
 
         #[test]
         fn it_executes_compares() {
-            let mut state = ComputerState::initialize_from_image(vec![0x00, 0x80, 0xf0, 0xfe, 0xff]);
+            let mut state = ComputerState::initialize();
 
             state.registers.accumulator = 0x10;
             state.registers.x = 0xf0;
             state.registers.y = 0xff;
 
-            state.execute_operation(Operation::CMP, Operand::Address(0)).expect("Couldn't execute CMP");
+            state.execute_operation(Operation::CMP, Operand::Immediate(0x00)).expect("Couldn't execute CMP");
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
-            state.execute_operation(Operation::CMP, Operand::Address(1)).expect("Couldn't execute CMP");
+            state.execute_operation(Operation::CMP, Operand::Immediate(0x80)).expect("Couldn't execute CMP");
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::CARRY));
 
 
-            state.execute_operation(Operation::CPX, Operand::Address(0)).expect("Couldn't execute CPX");
+            state.execute_operation(Operation::CPX, Operand::Immediate(0x00)).expect("Couldn't execute CPX");
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
-            state.execute_operation(Operation::CPX, Operand::Address(1)).expect("Couldn't execute CPX");
+            state.execute_operation(Operation::CPX, Operand::Immediate(0x80)).expect("Couldn't execute CPX");
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
-            state.execute_operation(Operation::CPX, Operand::Address(2)).expect("Couldn't execute CPX");
+            state.execute_operation(Operation::CPX, Operand::Immediate(0xf0)).expect("Couldn't execute CPX");
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
 
-            state.execute_operation(Operation::CPY, Operand::Address(0)).expect("Couldn't execute CPY");
+            state.execute_operation(Operation::CPY, Operand::Immediate(0x00)).expect("Couldn't execute CPY");
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
-            state.execute_operation(Operation::CPY, Operand::Address(3)).expect("Couldn't execute CPY");
+            state.execute_operation(Operation::CPY, Operand::Immediate(0xfe)).expect("Couldn't execute CPY");
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
-            state.execute_operation(Operation::CPY, Operand::Address(4)).expect("Couldn't execute CPY");
+            state.execute_operation(Operation::CPY, Operand::Immediate(0xff)).expect("Couldn't execute CPY");
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::CARRY));
@@ -773,35 +778,34 @@ mod unit_tests {
 
         #[test]
         fn it_executes_eor() {
-            let mut state = ComputerState::initialize_from_image(vec![0x55, 0xf0, 0x0f, 0xa0, 0x01]);
-
+            let mut state = ComputerState::initialize();
 
             state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::EOR, Operand::Address(0)).unwrap();
+            state.execute_operation(Operation::EOR, Operand::Immediate(0x55)).unwrap();
             assert_eq!(state.registers.accumulator, 0xaa);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x55;
-            state.execute_operation(Operation::EOR, Operand::Address(0)).unwrap();
+            state.execute_operation(Operation::EOR, Operand::Immediate(0x55)).unwrap();
             assert_eq!(state.registers.accumulator, 0x00);
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::EOR, Operand::Address(1)).unwrap();
+            state.execute_operation(Operation::EOR, Operand::Immediate(0xf0)).unwrap();
             assert_eq!(state.registers.accumulator, 0x0f);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0x0f;
-            state.execute_operation(Operation::EOR, Operand::Address(1)).unwrap();
+            state.execute_operation(Operation::EOR, Operand::Immediate(0xf0)).unwrap();
             assert_eq!(state.registers.accumulator, 0xff);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
 
             state.registers.accumulator = 0xaa;
-            state.execute_operation(Operation::EOR, Operand::Address(3)).unwrap();
+            state.execute_operation(Operation::EOR, Operand::Immediate(0xa0)).unwrap();
             assert_eq!(state.registers.accumulator, 0x0a);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
@@ -867,7 +871,7 @@ mod unit_tests {
 
         #[test]
         fn in_executes_jump() {
-            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let mut state = ComputerState::initialize();
             state.registers.stack_pointer = 0xff;
 
             state.execute_operation(Operation::JMP, Operand::Address(0x55aa)).unwrap();
@@ -881,19 +885,19 @@ mod unit_tests {
 
         #[test]
         fn it_executes_loads() {
-            let mut state = ComputerState::initialize_from_image(vec![0x55, 0x80, 0x00]);
+            let mut state = ComputerState::initialize();
 
-            state.execute_operation(Operation::LDA, Operand::Address(0)).unwrap();
+            state.execute_operation(Operation::LDA, Operand::Immediate(0x55)).unwrap();
             assert_eq!(state.registers.accumulator, 0x55);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
 
-            state.execute_operation(Operation::LDX, Operand::Address(1)).unwrap();
+            state.execute_operation(Operation::LDX, Operand::Immediate(0x80)).unwrap();
             assert_eq!(state.registers.x, 0x80);
             assert!(!state.get_status_flag(StatusFlag::ZERO));
             assert!(state.get_status_flag(StatusFlag::NEGATIVE));
 
-            state.execute_operation(Operation::LDY, Operand::Address(2)).unwrap();
+            state.execute_operation(Operation::LDY, Operand::Immediate(0x00)).unwrap();
             assert_eq!(state.registers.y, 0x00);
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
@@ -902,7 +906,7 @@ mod unit_tests {
 
         #[test]
         fn it_sets_status_flags() {
-            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let mut state = ComputerState::initialize();
             state.registers.status = 0b00110011;
             state.set_status_flag(StatusFlag::ZERO, false);
 
@@ -911,7 +915,7 @@ mod unit_tests {
 
         #[test]
         fn it_gets_status_flags() {
-            let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
+            let mut state = ComputerState::initialize();
             state.registers.status = 0b00110011;
 
             assert_eq!(state.get_status_flag(StatusFlag::ZERO), true);
