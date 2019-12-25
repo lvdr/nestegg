@@ -18,6 +18,7 @@ pub struct RegisterFile {
     program_counter : u16,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum StatusFlag
 {
     CARRY     = 0,
@@ -488,104 +489,61 @@ mod unit_tests {
             assert_eq!(state_initial_registers, state.registers);
         }
 
+        fn check_accumulator_op(state: &mut ComputerState, operation: Operation,
+                                initial_value: Option<u8>, operand_value: Option<u8>,
+                                expected_value: u8,
+                                expected_flags: Vec<StatusFlag>) {
+            match initial_value {
+                Some(value) => state.registers.accumulator = value,
+                None => (),
+            };
+
+            let operand = match  operand_value {
+                Some(val) => Operand::Immediate(val),
+                None => Operand::Accumulator,
+            };
+
+            state.execute_operation(operation, operand).unwrap();
+            assert_eq!(state.registers.accumulator, expected_value);
+            let mut expected_sr = 0u8;
+            for flag in expected_flags.iter() {
+                let index = flag.clone() as u8;
+                expected_sr |= 1 << index;
+            }
+            assert_eq!(state.registers.status, expected_sr);
+        }
+
         #[test]
         fn it_executes_adc() {
             let mut state = ComputerState::initialize();
 
-            state.registers.accumulator = 33;
-            state.execute_operation(Operation::ADC, Operand::Immediate(24)).expect("Couldn't execute ADC");
-            assert_eq!(state.registers.accumulator, 33 + 24);
-            assert!(!state.get_status_flag(StatusFlag::CARRY));
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-
-            state.execute_operation(Operation::ADC, Operand::Immediate(55)).expect("Couldn't execute ADC");
-            assert_eq!(state.registers.accumulator, 33 + 24 + 55);
-            assert!(!state.get_status_flag(StatusFlag::CARRY));
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-
-            state.execute_operation(Operation::ADC, Operand::Immediate(200)).expect("Couldn't execute ADC");
-            assert_eq!(state.registers.accumulator, 56);
-            assert!(state.get_status_flag(StatusFlag::CARRY));
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-
-            state.execute_operation(Operation::ADC, Operand::Immediate(100)).expect("Couldn't execute ADC");
-            assert_eq!(state.registers.accumulator, 157);
-            assert!(!state.get_status_flag(StatusFlag::CARRY));
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-
-            state.execute_operation(Operation::ADC, Operand::Immediate(99)).expect("Couldn't execute ADC");
-            assert_eq!(state.registers.accumulator, 0);
-            assert!(state.get_status_flag(StatusFlag::CARRY));
-            assert!(state.get_status_flag(StatusFlag::ZERO));
+            check_accumulator_op(&mut state, Operation::ADC, Some(33), Some(24), 33 + 24, vec![]);
+            check_accumulator_op(&mut state, Operation::ADC, None,     Some(55), 33 + 24 + 55, vec![]);
+            check_accumulator_op(&mut state, Operation::ADC, None,     Some(200), 56, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::ADC, None,     Some(100), 157, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::ADC, None,     Some(99), 0,
+                                 vec![StatusFlag::CARRY, StatusFlag::ZERO]);
         }
 
         #[test]
         fn it_executes_and() {
             let mut state = ComputerState::initialize();
 
-
-            state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::AND, Operand::Immediate(0x55)).expect("Couldn't execute AND");
-            assert_eq!(state.registers.accumulator, 0xff & 0x55);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0xaa;
-            state.execute_operation(Operation::AND, Operand::Immediate(0xf0)).expect("Couldn't execute AND");
-            assert_eq!(state.registers.accumulator, 0xa0);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0x45;
-            state.execute_operation(Operation::AND, Operand::Immediate(0x0f)).expect("Couldn't execute AND");
-            assert_eq!(state.registers.accumulator, 0x45 & 0x0f);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0x55;
-            state.execute_operation(Operation::AND, Operand::Immediate(0xa0)).expect("Couldn't execute AND");
-            assert_eq!(state.registers.accumulator, 0x00);
-            assert!(state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0x01;
-            state.execute_operation(Operation::AND, Operand::Immediate(0x01)).expect("Couldn't execute AND");
-            assert_eq!(state.registers.accumulator, 0x01);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            check_accumulator_op(&mut state, Operation::AND, Some(0xFF), Some(0x55), 0xff & 0x55, vec![]);
+            check_accumulator_op(&mut state, Operation::AND, Some(0xaa), Some(0xf0), 0xaa & 0xf0, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::AND, Some(0x45), Some(0x0f), 0x45 & 0x0f, vec![]);
+            check_accumulator_op(&mut state, Operation::AND, Some(0x55), Some(0xa0), 0x55 & 0xa0, vec![StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::AND, Some(0x01), Some(0x01), 0x01 & 0x01, vec![]);
         }
 
         #[test]
         fn it_executes_asl() {
             let mut state = ComputerState::initialize();
 
-            state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute ASL");
-            assert_eq!(state.registers.accumulator, 0xfe);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
-            assert!(state.get_status_flag(StatusFlag::CARRY));
-
-            state.registers.accumulator = 0x55;
-            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute ASL");
-            assert_eq!(state.registers.accumulator, 0xaa);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
-            assert!(!state.get_status_flag(StatusFlag::CARRY));
-
-            state.registers.accumulator = 0x80;
-            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute AND");
-            assert_eq!(state.registers.accumulator, 0x00);
-            assert!(state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-            assert!(state.get_status_flag(StatusFlag::CARRY));
-
-            state.registers.accumulator = 0x25;
-            state.execute_operation(Operation::ASL, Operand::Accumulator).expect("Couldn't execute AND");
-            assert_eq!(state.registers.accumulator, 0x4a);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-            assert!(!state.get_status_flag(StatusFlag::CARRY));
+            check_accumulator_op(&mut state, Operation:: ASL, Some(0xff), None, 0xfe, vec![StatusFlag::NEGATIVE, StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation:: ASL, Some(0x55), None, 0xaa, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation:: ASL, Some(0x80), None, 0x00, vec![StatusFlag::ZERO, StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation:: ASL, Some(0x25), None, 0x4a, vec![]);
         }
 
         #[test]
@@ -639,17 +597,10 @@ mod unit_tests {
         fn it_executes_bit() {
             let mut state = ComputerState::initialize();
 
-            state.registers.accumulator = 0x01;
-            state.execute_operation(Operation::BIT, Operand::Immediate(0x55)).expect("Couldn't execute BIT");
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-            assert!(state.get_status_flag(StatusFlag::OVERFLOW));
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-
-            state.registers.accumulator = 0x0f;
-            state.execute_operation(Operation::BIT, Operand::Immediate(0xf0)).expect("Couldn't execute BIT");
-            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
-            assert!(state.get_status_flag(StatusFlag::OVERFLOW));
-            assert!(state.get_status_flag(StatusFlag::ZERO));
+            check_accumulator_op(&mut state, Operation::BIT, Some(0x01), Some(0x55), 0x01,
+                                 vec![StatusFlag::OVERFLOW]);
+            check_accumulator_op(&mut state, Operation::BIT, Some(0x0f), Some(0xf0), 0x0f,
+                                 vec![StatusFlag::NEGATIVE, StatusFlag::OVERFLOW, StatusFlag::ZERO]);
         }
 
         #[test]
@@ -780,35 +731,11 @@ mod unit_tests {
         fn it_executes_eor() {
             let mut state = ComputerState::initialize();
 
-            state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::EOR, Operand::Immediate(0x55)).unwrap();
-            assert_eq!(state.registers.accumulator, 0xaa);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0x55;
-            state.execute_operation(Operation::EOR, Operand::Immediate(0x55)).unwrap();
-            assert_eq!(state.registers.accumulator, 0x00);
-            assert!(state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0xff;
-            state.execute_operation(Operation::EOR, Operand::Immediate(0xf0)).unwrap();
-            assert_eq!(state.registers.accumulator, 0x0f);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0x0f;
-            state.execute_operation(Operation::EOR, Operand::Immediate(0xf0)).unwrap();
-            assert_eq!(state.registers.accumulator, 0xff);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(state.get_status_flag(StatusFlag::NEGATIVE));
-
-            state.registers.accumulator = 0xaa;
-            state.execute_operation(Operation::EOR, Operand::Immediate(0xa0)).unwrap();
-            assert_eq!(state.registers.accumulator, 0x0a);
-            assert!(!state.get_status_flag(StatusFlag::ZERO));
-            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            check_accumulator_op(&mut state, Operation::EOR, Some(0xff), Some(0x55), 0xaa, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::EOR, Some(0x55), Some(0x55), 0x00, vec![StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::EOR, Some(0xff), Some(0xf0), 0x0f, vec![]);
+            check_accumulator_op(&mut state, Operation::EOR, Some(0x0f), Some(0xf0), 0xff, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::EOR, Some(0xaa), Some(0xa0), 0x0a, vec![]);
         }
 
         #[test]
