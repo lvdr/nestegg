@@ -41,6 +41,7 @@ pub struct ComputerState {
 enum Operand {
     Accumulator,
     Address(u16),
+    Immediate(u8),
     Implied,
 }
 
@@ -116,6 +117,7 @@ impl ComputerState {
         match operand {
             Operand::Accumulator => Ok(self.registers.accumulator),
             Operand::Address(addr) => Ok(self.get_byte_from_memory(addr as usize)),
+            Operand::Immediate(value) => Ok(value),
             Operand::Implied => Err("Cannot get implied operand value")
         }
     }
@@ -124,6 +126,7 @@ impl ComputerState {
         match operand {
             Operand::Accumulator => self.registers.accumulator = value,
             Operand::Address(addr) => self.write_byte_to_memory(addr as usize, value),
+            Operand::Immediate(_) => return Err("Cannot set immediate operand value"),
             Operand::Implied => return Err("Cannot set implied operand value"),
         }
         Ok(())
@@ -210,9 +213,9 @@ impl ComputerState {
     }
 
     fn get_immediate_operand(&mut self) -> Operand {
-        let operand = Operand::Address(self.registers.program_counter);
+        let address =  self.registers.program_counter as usize;
         self.registers.program_counter += 1;
-        operand
+        Operand::Immediate(self.get_byte_from_memory(address))
     }
 
     fn get_indirect_operand(&mut self) -> Operand {
