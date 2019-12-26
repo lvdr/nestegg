@@ -198,6 +198,8 @@ impl ComputerState {
             Operation::PLP => Ok(self.execute_pull_status()?), 
             Operation::ROL => Ok(self.execute_rotate_left(operand)?),
             Operation::ROR => Ok(self.execute_rotate_right(operand)?),
+            Operation::RTI => Ok(self.execute_return_from_interrupt()?),
+            Operation::RTS => Ok(self.execute_return_from_subroutine()?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -498,6 +500,17 @@ impl ComputerState {
         self.set_status_flag(StatusFlag::CARRY, high_bit);
         self.set_operand_value(operand, result)?;
 
+        Ok(())
+    }
+
+    fn execute_return_from_interrupt(&mut self) -> Result<(), &'static str> {
+        self.registers.status = self.pull_byte_from_stack();
+        self.registers.program_counter = self.pull_word_from_stack();
+        Ok(())
+    }
+
+    fn execute_return_from_subroutine(&mut self) -> Result<(), &'static str> {
+        self.registers.program_counter = self.pull_word_from_stack() + 1;
         Ok(())
     }
 }
@@ -970,6 +983,21 @@ mod unit_tests {
             check_accumulator_op(&mut state, Operation::ROR, Some(0x01), None, 0x80, vec![StatusFlag::NEGATIVE, StatusFlag::CARRY]);
         }
 
+        #[test]
+        fn it_executes_returns() {
+            let mut state = ComputerState::initialize();
+
+            state.push_word_to_stack(0xdead);
+            state.push_byte_to_stack(0x57);
+            state.push_word_to_stack(0xbeef);
+
+            state.execute_operation(Operation::RTS, Operand::Implied).unwrap();
+            assert_eq!(state.registers.program_counter, 0xbef0);
+
+            state.execute_operation(Operation::RTI, Operand::Implied).unwrap();
+            assert_eq!(state.registers.program_counter, 0xdead);
+            assert_eq!(state.registers.status, 0x57);
+        }
 
         #[test]
         fn it_sets_status_flags() {
