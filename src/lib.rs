@@ -196,6 +196,8 @@ impl ComputerState {
             Operation::PHP => Ok(self.push_byte_to_stack(self.registers.status)),
             Operation::PLA => Ok(self.execute_pull_accumulator()?), 
             Operation::PLP => Ok(self.execute_pull_status()?), 
+            Operation::ROL => Ok(self.execute_rotate_left(operand)?),
+            Operation::ROR => Ok(self.execute_rotate_right(operand)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -470,6 +472,32 @@ impl ComputerState {
 
     fn execute_pull_status(&mut self) -> Result<(), &'static str> {
         self.registers.status = self.pull_byte_from_stack();
+        Ok(())
+    }
+
+    fn execute_rotate_right(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let low_bit = operand_value & 1 != 0;
+        let new_high_bit = (self.get_status_flag(StatusFlag::CARRY) as u8) << 7;
+        let result = (operand_value >> 1) | new_high_bit;
+
+        self.set_zero_and_negative_flags(result);
+        self.set_status_flag(StatusFlag::CARRY, low_bit);
+        self.set_operand_value(operand, result)?;
+
+        Ok(())
+    }
+
+    fn execute_rotate_left(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let high_bit = operand_value & (1 << 7) != 0;
+        let new_low_bit = self.get_status_flag(StatusFlag::CARRY) as u8;
+        let result = (operand_value << 1) | new_low_bit;
+
+        self.set_zero_and_negative_flags(result);
+        self.set_status_flag(StatusFlag::CARRY, high_bit);
+        self.set_operand_value(operand, result)?;
+
         Ok(())
     }
 }
@@ -925,6 +953,21 @@ mod unit_tests {
             assert_eq!(state.registers.accumulator, 0x00);
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
             assert!(state.get_status_flag(StatusFlag::ZERO));
+        }
+
+        #[test]
+        fn it_executes_rotates() {
+            let mut state = ComputerState::initialize();
+
+            check_accumulator_op(&mut state, Operation::ROL, Some(0x88), None, 0x10, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::ROL, Some(0x3a), None, 0x75, vec![]);
+            check_accumulator_op(&mut state, Operation::ROL, Some(0x80), None, 0x00, vec![StatusFlag::ZERO, StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::ROL, Some(0xf0), None, 0xe1, vec![StatusFlag::NEGATIVE, StatusFlag::CARRY]);
+
+            check_accumulator_op(&mut state, Operation::ROR, Some(0xf2), None, 0xf9, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::ROR, Some(0x00), None, 0x00, vec![StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::ROR, Some(0x03), None, 0x01, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::ROR, Some(0x01), None, 0x80, vec![StatusFlag::NEGATIVE, StatusFlag::CARRY]);
         }
 
 
