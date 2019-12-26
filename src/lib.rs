@@ -62,9 +62,9 @@ impl ComputerState {
     }
 
     pub fn get_word_from_memory(&self, index: usize) -> u16 {
-        let low = self.memory[index] as u16;
-        let high = self.memory[index + 1] as u16;
-        (high << 8) | low
+        let low = self.memory[index];
+        let high = self.memory[index + 1];
+        u16::from_le_bytes([low, high])
     }
 
     pub fn write_byte_to_memory(&mut self, index: usize, value: u8) {
@@ -72,22 +72,21 @@ impl ComputerState {
     }
 
     pub fn write_word_to_memory(&mut self, index: usize, value: u16) {
-        let low = (value & 0xff) as u8;
-        let high = (value >> 8) as u8;
-        self.memory[index] = low;
-        self.memory[index + 1] = high;
+        let bytes = value.to_le_bytes();
+        self.memory[index] = bytes[0];
+        self.memory[index + 1] = bytes[1];
     }
 
     pub fn pull_byte_from_stack(&mut self) -> u8 {
-        let stack_address = self.registers.stack_pointer.wrapping_add(1) as usize + 0x100;
         self.registers.stack_pointer = self.registers.stack_pointer.wrapping_add(1);
+        let stack_address = self.registers.stack_pointer as usize + 0x100;
         self.get_byte_from_memory(stack_address)
     }
 
     pub fn pull_word_from_stack(&mut self) -> u16 {
-        let stack_address = self.registers.stack_pointer.wrapping_add(1) as usize + 0x100;
-        self.registers.stack_pointer = self.registers.stack_pointer.wrapping_add(2);
-        self.get_word_from_memory(stack_address)
+        let low = self.pull_byte_from_stack();
+        let high = self.pull_byte_from_stack();
+        u16::from_le_bytes([low, high])
     }
 
     pub fn push_byte_to_stack(&mut self, value: u8) {
@@ -97,9 +96,9 @@ impl ComputerState {
     }
 
     pub fn push_word_to_stack(&mut self, value: u16) {
-        let stack_address = self.registers.stack_pointer.wrapping_sub(1) as usize + 0x100;
-        self.write_word_to_memory(stack_address, value);
-        self.registers.stack_pointer = self.registers.stack_pointer.wrapping_sub(2);
+        let bytes = value.to_le_bytes();
+        self.push_byte_to_stack(bytes[1]);
+        self.push_byte_to_stack(bytes[0]);
     }
 
     pub fn step(mut self) -> Result<Self, &'static str> {
