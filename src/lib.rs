@@ -78,13 +78,13 @@ impl ComputerState {
         self.memory[index + 1] = high;
     }
 
-    pub fn pop_byte_from_stack(&mut self) -> u8 {
+    pub fn pull_byte_from_stack(&mut self) -> u8 {
         let stack_address = self.registers.stack_pointer.wrapping_add(1) as usize + 0x100;
         self.registers.stack_pointer = self.registers.stack_pointer.wrapping_add(1);
         self.get_byte_from_memory(stack_address)
     }
 
-    pub fn pop_word_from_stack(&mut self) -> u16 {
+    pub fn pull_word_from_stack(&mut self) -> u16 {
         let stack_address = self.registers.stack_pointer.wrapping_add(1) as usize + 0x100;
         self.registers.stack_pointer = self.registers.stack_pointer.wrapping_add(2);
         self.get_word_from_memory(stack_address)
@@ -193,8 +193,8 @@ impl ComputerState {
             Operation::LSR => Ok(self.execute_right_shift(operand)?),
             Operation::NOP => Ok(()),
             Operation::ORA => Ok(self.execute_inclusive_or(operand)?),
-            Operation::PHA => Ok(self.execute_push_accumulator()?),
-            Operation::PHP => Ok(self.execute_push_status()?),
+            Operation::PHA => Ok(self.push_byte_to_stack(self.registers.accumulator)),
+            Operation::PHP => Ok(self.push_byte_to_stack(self.registers.status)),
             Operation::PLA => Ok(self.execute_pull_accumulator()?), 
             Operation::PLP => Ok(self.execute_pull_status()?), 
             _ => Err("Unimplemented operation")
@@ -460,20 +460,18 @@ impl ComputerState {
         Ok(())
     }
 
-    fn execute_push_accumulator(&mut self) -> Result<(), &'static str> {
-        unimplemented!();
-    }
-
-    fn execute_push_status(&mut self) -> Result<(), &'static str> {
-        unimplemented!();
-    }
-
     fn execute_pull_accumulator(&mut self) -> Result<(), &'static str> {
-        unimplemented!();
+        let new_accumulator = self.pull_byte_from_stack();
+
+        self.set_zero_and_negative_flags(new_accumulator);
+        self.registers.accumulator = new_accumulator;
+
+        Ok(())
     }
 
     fn execute_pull_status(&mut self) -> Result<(), &'static str> {
-        unimplemented!();
+        self.registers.status = self.pull_byte_from_stack();
+        Ok(())
     }
 }
 
@@ -851,7 +849,7 @@ mod unit_tests {
             state.execute_operation(Operation::JSR, Operand::Address(0x7777)).unwrap();
             assert_eq!(state.registers.program_counter, 0x7777);
             assert_eq!(state.registers.stack_pointer, 0xfd);
-            assert_eq!(state.pop_word_from_stack(), 0x55aa - 1);
+            assert_eq!(state.pull_word_from_stack(), 0x55aa - 1);
         }
 
         #[test]
@@ -893,6 +891,41 @@ mod unit_tests {
             check_accumulator_op(&mut state, Operation::ORA, Some(0xf0), Some(0x0e), 0xfe, vec![StatusFlag::NEGATIVE]);
             check_accumulator_op(&mut state, Operation::ORA, Some(0x0f), Some(0xaa), 0xaf, vec![StatusFlag::NEGATIVE]);
             check_accumulator_op(&mut state, Operation::ORA, Some(0x32), Some(0x44), 0x76, vec![]);
+        }
+
+        #[test]
+        fn it_executes_pushes_and_pulls() {
+            let mut state = ComputerState::initialize();
+            state.registers.stack_pointer = 0xff;
+            
+            state.registers.accumulator = 0x00;
+            state.execute_operation(Operation::PHA, Operand::Implied).unwrap();
+            assert_eq!(state.get_byte_from_memory(0x1ff), 0x00);
+            assert_eq!(state.registers.stack_pointer, 0xfe);
+
+            state.registers.status = 0x55;
+            state.execute_operation(Operation::PHP, Operand::Implied).unwrap();
+            assert_eq!(state.get_byte_from_memory(0x1fe), 0x55);
+            assert_eq!(state.registers.stack_pointer, 0xfd);
+
+            state.registers.accumulator = 0x43;
+            state.execute_operation(Operation::PHA, Operand::Implied).unwrap();
+            assert_eq!(state.get_byte_from_memory(0x1fd), 0x43);
+            assert_eq!(state.registers.stack_pointer, 0xfc);
+
+            state.registers.accumulator = 0x00;
+            state.execute_operation(Operation::PLA, Operand::Implied).unwrap();
+            assert_eq!(state.registers.accumulator, 0x43);
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(!state.get_status_flag(StatusFlag::ZERO));
+
+            state.execute_operation(Operation::PLP, Operand::Implied).unwrap();
+            assert_eq!(state.registers.status, 0x55);
+
+            state.execute_operation(Operation::PLA, Operand::Implied).unwrap();
+            assert_eq!(state.registers.accumulator, 0x00);
+            assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+            assert!(state.get_status_flag(StatusFlag::ZERO));
         }
 
 
