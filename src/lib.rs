@@ -158,7 +158,6 @@ impl ComputerState {
 
     fn execute_operation(&mut self, op : Operation, operand: Operand) -> Result<(), &'static str> {
         match op {
-            Operation::NOP => Ok(()),
             Operation::ADC => Ok(self.execute_add_with_carry(operand)?),
             Operation::AND => Ok(self.execute_and(operand)?),
             Operation::ASL => Ok(self.execute_left_shift(operand)?),
@@ -191,6 +190,13 @@ impl ComputerState {
             Operation::LDA => Ok(self.execute_load_accumulator(operand)?),
             Operation::LDX => Ok(self.execute_load_x(operand)?),
             Operation::LDY => Ok(self.execute_load_y(operand)?),
+            Operation::LSR => Ok(self.execute_right_shift(operand)?),
+            Operation::NOP => Ok(()),
+            Operation::ORA => Ok(self.execute_inclusive_or(operand)?),
+            Operation::PHA => Ok(self.execute_push_accumulator()?),
+            Operation::PHP => Ok(self.execute_push_status()?),
+            Operation::PLA => Ok(self.execute_pull_accumulator()?), 
+            Operation::PLP => Ok(self.execute_pull_status()?), 
             _ => Err("Unimplemented operation")
        }
     }
@@ -430,6 +436,44 @@ impl ComputerState {
         self.registers.y = operand_value;
 
         Ok(())
+    }
+
+    fn execute_right_shift(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let low_bit = operand_value & 1 != 0;
+        let result = operand_value >> 1;
+
+        self.set_status_flag(StatusFlag::CARRY, low_bit);
+        self.set_zero_and_negative_flags(result);
+        self.set_operand_value(operand, result)?;
+
+        Ok(())
+    }
+
+    fn execute_inclusive_or(&mut self, operand: Operand) -> Result<(), &'static str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let result = self.registers.accumulator | operand_value;
+
+        self.set_zero_and_negative_flags(result);
+        self.registers.accumulator = result;
+
+        Ok(())
+    }
+
+    fn execute_push_accumulator(&mut self) -> Result<(), &'static str> {
+        unimplemented!();
+    }
+
+    fn execute_push_status(&mut self) -> Result<(), &'static str> {
+        unimplemented!();
+    }
+
+    fn execute_pull_accumulator(&mut self) -> Result<(), &'static str> {
+        unimplemented!();
+    }
+
+    fn execute_pull_status(&mut self) -> Result<(), &'static str> {
+        unimplemented!();
     }
 }
 
@@ -828,6 +872,27 @@ mod unit_tests {
             assert_eq!(state.registers.y, 0x00);
             assert!(state.get_status_flag(StatusFlag::ZERO));
             assert!(!state.get_status_flag(StatusFlag::NEGATIVE));
+        }
+
+        #[test]
+        fn it_executes_lsr() {
+            let mut state = ComputerState::initialize();
+
+            check_accumulator_op(&mut state, Operation::LSR, Some(0xff), None, 0x7f, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::LSR, Some(0x00), None, 0x00, vec![StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::LSR, Some(0x01), None, 0x00, vec![StatusFlag::ZERO, StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::LSR, Some(0x92), None, 0x49, vec![]);
+        }
+
+        #[test]
+        fn it_executes_ora() {
+            let mut state = ComputerState::initialize();
+
+            check_accumulator_op(&mut state, Operation::ORA, Some(0x00), Some(0x00), 0x00, vec![StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::ORA, Some(0x01), Some(0x00), 0x01, vec![]);
+            check_accumulator_op(&mut state, Operation::ORA, Some(0xf0), Some(0x0e), 0xfe, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::ORA, Some(0x0f), Some(0xaa), 0xaf, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::ORA, Some(0x32), Some(0x44), 0x76, vec![]);
         }
 
 
