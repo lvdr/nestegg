@@ -200,6 +200,7 @@ impl ComputerState {
             Operation::ROR => Ok(self.execute_rotate_right(operand)?),
             Operation::RTI => Ok(self.execute_return_from_interrupt()?),
             Operation::RTS => Ok(self.execute_return_from_subroutine()?),
+            Operation::SBC => Ok(self.execute_substract_with_carry(operand)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -513,6 +514,29 @@ impl ComputerState {
         self.registers.program_counter = self.pull_word_from_stack() + 1;
         Ok(())
     }
+
+    fn execute_substract_with_carry(&mut self, operand: Operand) -> Result<(), &'static  str> {
+        let operand_value = self.get_operand_value(operand)?;
+        let accumulator = self.registers.accumulator;
+        let carry = 1 - (self.get_status_flag(StatusFlag::CARRY) as u8);
+
+        let (first_sum, first_overflow) = accumulator.overflowing_sub(operand_value);
+        let (result, second_overflow) = first_sum.overflowing_sub(carry);
+
+        let new_carry: bool = !first_overflow && !second_overflow;
+        self.set_status_flag(StatusFlag::CARRY, new_carry);
+
+        let byte_positive: bool = !is_negative(operand_value);
+        let accumulator_positive: bool = !is_negative(accumulator as u8);
+        let sum_positive: bool = !is_negative(result);
+        let overflow: bool = (byte_positive != accumulator_positive) && (sum_positive == byte_positive);
+        self.set_status_flag(StatusFlag::OVERFLOW, overflow);
+
+        self.set_zero_and_negative_flags(result);
+        self.registers.accumulator = result;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -599,12 +623,12 @@ mod unit_tests {
         fn it_executes_adc() {
             let mut state = ComputerState::initialize();
 
-            check_accumulator_op(&mut state, Operation::ADC, Some(33), Some(24), 33 + 24, vec![]);
-            check_accumulator_op(&mut state, Operation::ADC, None,     Some(55), 33 + 24 + 55, vec![]);
-            check_accumulator_op(&mut state, Operation::ADC, None,     Some(200), 56, vec![StatusFlag::CARRY]);
-            check_accumulator_op(&mut state, Operation::ADC, None,     Some(100), 157, vec![StatusFlag::NEGATIVE]);
-            check_accumulator_op(&mut state, Operation::ADC, None,     Some(99), 0,
-                                 vec![StatusFlag::CARRY, StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::ADC, Some(33),   Some(24), 33 + 24, vec![]);
+            check_accumulator_op(&mut state, Operation::ADC, None,       Some(55), 33 + 24 + 55, vec![]);
+            check_accumulator_op(&mut state, Operation::ADC, None,       Some(200), 56, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::ADC, None,       Some(100), 157, vec![StatusFlag::NEGATIVE, StatusFlag::OVERFLOW]);
+            check_accumulator_op(&mut state, Operation::ADC, None,       Some(99), 0, vec![StatusFlag::CARRY, StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::ADC, Some(0x80), Some(0x80), 0x01, vec![StatusFlag::CARRY, StatusFlag::OVERFLOW]);
         }
 
         #[test]
@@ -997,6 +1021,19 @@ mod unit_tests {
             state.execute_operation(Operation::RTI, Operand::Implied).unwrap();
             assert_eq!(state.registers.program_counter, 0xdead);
             assert_eq!(state.registers.status, 0x57);
+        }
+
+        #[test]
+        fn it_executes_sbc() {
+            let mut state = ComputerState::initialize();
+            state.set_status_flag(StatusFlag::CARRY, true);
+
+            check_accumulator_op(&mut state, Operation::SBC, Some(120),  Some(30), 90, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::SBC, None,       Some(25), 65, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::SBC, None,       Some(65+46), 210, vec![StatusFlag::NEGATIVE]);
+            check_accumulator_op(&mut state, Operation::SBC, None,       Some(200), 9, vec![StatusFlag::CARRY]);
+            check_accumulator_op(&mut state, Operation::SBC, None,       Some(9), 0, vec![StatusFlag::CARRY, StatusFlag::ZERO]);
+            check_accumulator_op(&mut state, Operation::SBC, Some(10),   Some(128), 138, vec![StatusFlag::NEGATIVE, StatusFlag::OVERFLOW]);
         }
 
         #[test]
