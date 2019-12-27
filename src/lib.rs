@@ -611,12 +611,20 @@ mod unit_tests {
 
             state.execute_operation(operation, operand).unwrap();
             assert_eq!(state.registers.accumulator, expected_value);
-            let mut expected_sr = 0u8;
+            check_status_flags(&state, expected_flags);
+        }
+
+        fn check_status_flags(state: &ComputerState, expected_flags: Vec<StatusFlag>) {
+            let all_flags = vec![StatusFlag::CARRY, StatusFlag::ZERO, StatusFlag::INTERRUPT, StatusFlag::DECIMAL,
+                                 StatusFlag::BREAK, StatusFlag::RESERVED, StatusFlag::OVERFLOW, StatusFlag::NEGATIVE];
+            let negative_flags = all_flags.iter().filter(|f| !expected_flags.contains(*f));
+
             for flag in expected_flags.iter() {
-                let index = flag.clone() as u8;
-                expected_sr |= 1 << index;
+                assert!(state.get_status_flag(*flag), "{:?} should be set", flag);
             }
-            assert_eq!(state.registers.status, expected_sr);
+            for flag in negative_flags {
+                assert!(!state.get_status_flag(*flag), "{:?} should not be set", flag);
+            }
         }
 
         #[test]
