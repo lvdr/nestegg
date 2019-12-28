@@ -201,6 +201,9 @@ impl ComputerState {
             Operation::RTI => Ok(self.execute_return_from_interrupt()?),
             Operation::RTS => Ok(self.execute_return_from_subroutine()?),
             Operation::SBC => Ok(self.execute_substract_with_carry(operand)?),
+            Operation::SEC => Ok(self.set_status_flag(StatusFlag::CARRY, true)),
+            Operation::SED => Ok(self.set_status_flag(StatusFlag::DECIMAL, true)),
+            Operation::SEI => Ok(self.set_status_flag(StatusFlag::INTERRUPT, true)),
             _ => Err("Unimplemented operation")
        }
     }
@@ -611,10 +614,10 @@ mod unit_tests {
 
             state.execute_operation(operation, operand).unwrap();
             assert_eq!(state.registers.accumulator, expected_value);
-            check_status_flags(&state, expected_flags);
+            check_status_flags(&state, &expected_flags);
         }
 
-        fn check_status_flags(state: &ComputerState, expected_flags: Vec<StatusFlag>) {
+        fn check_status_flags(state: &ComputerState, expected_flags: &Vec<StatusFlag>) {
             let all_flags = vec![StatusFlag::CARRY, StatusFlag::ZERO, StatusFlag::INTERRUPT, StatusFlag::DECIMAL,
                                  StatusFlag::BREAK, StatusFlag::RESERVED, StatusFlag::OVERFLOW, StatusFlag::NEGATIVE];
             let negative_flags = all_flags.iter().filter(|f| !expected_flags.contains(*f));
@@ -718,21 +721,39 @@ mod unit_tests {
         }
 
         #[test]
-        fn it_executes_clears() {
+        fn it_executes_flag_sets_and_clears() {
             let mut state = ComputerState::initialize_from_image(vec![0; 1024]);
             state.registers.status = 0xff;
+            let mut expected_flags = vec![StatusFlag::ZERO, StatusFlag::BREAK, StatusFlag::RESERVED, StatusFlag::NEGATIVE,
+                                          StatusFlag::CARRY, StatusFlag::DECIMAL, StatusFlag::OVERFLOW, StatusFlag::INTERRUPT];
 
-            state.execute_operation(Operation::CLC, Operand::Implied).expect("Couldn't execute CLC");
-            assert!(!state.get_status_flag(StatusFlag::CARRY));
+            expected_flags.pop();
+            state.execute_operation(Operation::CLI, Operand::Implied).unwrap();
+            check_status_flags(&state, &expected_flags);
+            expected_flags.pop();
+            state.execute_operation(Operation::CLV, Operand::Implied).unwrap();
+            check_status_flags(&state, &expected_flags);
 
-            state.execute_operation(Operation::CLD, Operand::Implied).expect("Couldn't execute CLD");
-            assert!(!state.get_status_flag(StatusFlag::DECIMAL));
+            expected_flags.pop();
+            state.execute_operation(Operation::CLD, Operand::Implied).unwrap();
+            check_status_flags(&state, &expected_flags);
 
-            state.execute_operation(Operation::CLI, Operand::Implied).expect("Couldn't execute CLI");
-            assert!(!state.get_status_flag(StatusFlag::INTERRUPT));
+            expected_flags.pop();
+            state.execute_operation(Operation::CLC, Operand::Implied).unwrap();
+            check_status_flags(&state, &expected_flags);
 
-            state.execute_operation(Operation::CLV, Operand::Implied).expect("Couldn't execute CLV");
-            assert!(!state.get_status_flag(StatusFlag::OVERFLOW));
+            expected_flags.push(StatusFlag::CARRY);
+            state.execute_operation(Operation::SEC, Operand::Implied).unwrap();
+            check_status_flags(&state, &expected_flags);
+
+            expected_flags.push(StatusFlag::DECIMAL);
+            state.execute_operation(Operation::SED, Operand::Implied).unwrap();
+            check_status_flags(&state, &expected_flags);
+
+            expected_flags.push(StatusFlag::INTERRUPT);
+            state.execute_operation(Operation::SEI, Operand::Implied).unwrap();
+            check_status_flags(&state, &expected_flags)
+
         }
 
         #[test]
