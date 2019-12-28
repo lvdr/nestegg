@@ -204,6 +204,9 @@ impl ComputerState {
             Operation::SEC => Ok(self.set_status_flag(StatusFlag::CARRY, true)),
             Operation::SED => Ok(self.set_status_flag(StatusFlag::DECIMAL, true)),
             Operation::SEI => Ok(self.set_status_flag(StatusFlag::INTERRUPT, true)),
+            Operation::STA => Ok(self.set_operand_value(operand, self.registers.accumulator)?),
+            Operation::STX => Ok(self.set_operand_value(operand, self.registers.x)?),
+            Operation::STY => Ok(self.set_operand_value(operand, self.registers.y)?),
             _ => Err("Unimplemented operation")
        }
     }
@@ -1063,6 +1066,21 @@ mod unit_tests {
             check_accumulator_op(&mut state, Operation::SBC, None,       Some(200), 9, vec![StatusFlag::CARRY]);
             check_accumulator_op(&mut state, Operation::SBC, None,       Some(9), 0, vec![StatusFlag::CARRY, StatusFlag::ZERO]);
             check_accumulator_op(&mut state, Operation::SBC, Some(10),   Some(128), 138, vec![StatusFlag::NEGATIVE, StatusFlag::OVERFLOW]);
+        }
+
+        #[test]
+        fn it_executes_stores() {
+            let mut state = ComputerState::initialize();
+            state.registers.accumulator = 0x11;
+            state.registers.x = 0x64;
+            state.registers.y = 0x42;
+
+            state.execute_operation(Operation::STA, Operand::Address(0)).unwrap();
+            assert_eq!(state.get_byte_from_memory(0), 0x11);
+            state.execute_operation(Operation::STX, Operand::Address(0)).unwrap();
+            assert_eq!(state.get_byte_from_memory(0), 0x64);
+            state.execute_operation(Operation::STY, Operand::Address(0)).unwrap();
+            assert_eq!(state.get_byte_from_memory(0), 0x42);
         }
 
         #[test]
