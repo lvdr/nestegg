@@ -207,6 +207,12 @@ impl ComputerState {
             Operation::STA => Ok(self.set_operand_value(operand, self.registers.accumulator)?),
             Operation::STX => Ok(self.set_operand_value(operand, self.registers.x)?),
             Operation::STY => Ok(self.set_operand_value(operand, self.registers.y)?),
+            Operation::TAX => Ok(self.execute_transfer_to_x(self.registers.accumulator)),
+            Operation::TAY => Ok(self.execute_transfer_to_y(self.registers.accumulator)),
+            Operation::TSX => Ok(self.execute_transfer_to_x(self.registers.stack_pointer)),
+            Operation::TXA => Ok(self.execute_transfer_to_accumulator(self.registers.x)),
+            Operation::TXS => Ok(self.execute_transfer_to_stack_pointer(self.registers.x)),
+            Operation::TYA => Ok(self.execute_transfer_to_accumulator(self.registers.y)),
             _ => Err("Unimplemented operation")
        }
     }
@@ -542,6 +548,26 @@ impl ComputerState {
         self.registers.accumulator = result;
 
         Ok(())
+    }
+
+    fn execute_transfer_to_accumulator(&mut self, value: u8) {
+        self.set_zero_and_negative_flags(value);
+        self.registers.accumulator = value;
+    }
+
+    fn execute_transfer_to_stack_pointer(&mut self, value: u8) {
+        self.set_zero_and_negative_flags(value);
+        self.registers.stack_pointer = value;
+    }
+
+    fn execute_transfer_to_x(&mut self, value: u8) {
+        self.set_zero_and_negative_flags(value);
+        self.registers.x = value;
+    }
+
+    fn execute_transfer_to_y(&mut self, value: u8) {
+        self.set_zero_and_negative_flags(value);
+        self.registers.y = value;
     }
 }
 
@@ -1081,6 +1107,40 @@ mod unit_tests {
             assert_eq!(state.get_byte_from_memory(0), 0x64);
             state.execute_operation(Operation::STY, Operand::Address(0)).unwrap();
             assert_eq!(state.get_byte_from_memory(0), 0x42);
+        }
+
+        #[test]
+        fn it_executes_transfers() {
+            let mut state = ComputerState::initialize();
+            
+            state.registers.accumulator = 0x11;
+            state.execute_operation(Operation::TAX, Operand::Implied).unwrap();
+            assert_eq!(state.registers.x, 0x11);
+            check_status_flags(&state, &vec![]);
+
+            state.registers.accumulator = 0xa4;
+            state.execute_operation(Operation::TAY, Operand::Implied).unwrap();
+            assert_eq!(state.registers.y, 0xa4);
+            check_status_flags(&state, &vec![StatusFlag::NEGATIVE]);
+
+            state.execute_operation(Operation::TSX, Operand::Implied).unwrap();
+            assert_eq!(state.registers.x, 0x00);
+            check_status_flags(&state, &vec![StatusFlag::ZERO]);
+
+            state.registers.x = 0x10;
+            state.execute_operation(Operation::TXA, Operand::Implied).unwrap();
+            assert_eq!(state.registers.accumulator, 0x10);
+            check_status_flags(&state, &vec![]);
+
+            state.registers.x = 0x85;
+            state.execute_operation(Operation::TXS, Operand::Implied).unwrap();
+            assert_eq!(state.registers.stack_pointer, 0x85);
+            check_status_flags(&state, &vec![StatusFlag::NEGATIVE]);
+
+            state.execute_operation(Operation::TYA, Operand::Implied).unwrap();
+            assert_eq!(state.registers.y, 0xa4);
+            check_status_flags(&state, &vec![StatusFlag::NEGATIVE]);
+
         }
 
         #[test]
