@@ -1160,5 +1160,24 @@ mod unit_tests {
             assert_eq!(state.get_status_flag(StatusFlag::ZERO), true);
             assert_eq!(state.get_status_flag(StatusFlag::NEGATIVE), false);
         }
+
+        #[test]
+        fn test_program_counter() {
+            let program = vec![0xEA, 0xEA, 0xEA, 0x69, 0x01, 0x69, 0x01];
+            let mut state = ComputerState::initialize_from_image(program);
+
+            assert_eq!(state.registers.program_counter, 0);
+            state = state.step().unwrap();
+            assert_eq!(state.registers.program_counter, 1);
+            state = state.step().unwrap();
+            assert_eq!(state.registers.program_counter, 2);
+            state = state.step().unwrap();
+            assert_eq!(state.registers.program_counter, 3);
+            state = state.step().unwrap();
+            assert_eq!(state.registers.program_counter, 5);
+            state = state.step().unwrap();
+            assert_eq!(state.registers.program_counter, 7);
+        }
+
     }
 }
