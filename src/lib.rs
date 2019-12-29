@@ -167,7 +167,7 @@ impl ComputerState {
             Operation::BMI => Ok(self.execute_branch_if(operand, StatusFlag::NEGATIVE, true)?),
             Operation::BNE => Ok(self.execute_branch_if(operand, StatusFlag::ZERO, false)?),
             Operation::BPL => Ok(self.execute_branch_if(operand, StatusFlag::NEGATIVE, false)?),
-            //Operation::BRK
+            Operation::BRK => Ok(self.execute_break()?),
             Operation::BVC => Ok(self.execute_branch_if(operand, StatusFlag::OVERFLOW, false)?),
             Operation::BVS => Ok(self.execute_branch_if(operand, StatusFlag::OVERFLOW, true)?),
             Operation::CLC => Ok(self.set_status_flag(StatusFlag::CARRY, false)),
@@ -212,8 +212,7 @@ impl ComputerState {
             Operation::TSX => Ok(self.execute_transfer_to_x(self.registers.stack_pointer)),
             Operation::TXA => Ok(self.execute_transfer_to_accumulator(self.registers.x)),
             Operation::TXS => Ok(self.execute_transfer_to_stack_pointer(self.registers.x)),
-            Operation::TYA => Ok(self.execute_transfer_to_accumulator(self.registers.y)),
-            _ => Err("Unimplemented operation")
+            Operation::TYA => Ok(self.execute_transfer_to_accumulator(self.registers.y))
        }
     }
 
@@ -278,6 +277,9 @@ impl ComputerState {
     }
 
     fn execute_add_with_carry(&mut self, operand: Operand) -> Result<(), &'static str> {
+        if self.get_status_flag(StatusFlag::DECIMAL) {
+            unimplemented!("No decimal mode support.");
+        }
         let operand_value = self.get_operand_value(operand)?;
         let carry: u16 = self.get_status_flag(StatusFlag::CARRY) as u16;
         let accumulator: u16 = self.registers.accumulator as u16;
@@ -346,6 +348,14 @@ impl ComputerState {
         self.set_status_flag(StatusFlag::NEGATIVE, bit_7);
         self.set_status_flag(StatusFlag::OVERFLOW, bit_6);
         self.set_status_flag(StatusFlag::ZERO, and_result == 0);
+        Ok(())
+    }
+
+    fn execute_break(&mut self) -> Result<(), &'static str> {
+        self.push_word_to_stack(self.registers.program_counter);
+        self.push_byte_to_stack(self.registers.status);
+
+        self.registers.program_counter = self.get_word_from_memory(0xfffe);
         Ok(())
     }
 
@@ -528,6 +538,9 @@ impl ComputerState {
     }
 
     fn execute_substract_with_carry(&mut self, operand: Operand) -> Result<(), &'static  str> {
+        if self.get_status_flag(StatusFlag::DECIMAL) {
+            unimplemented!("No decimal mode support.");
+        }
         let operand_value = self.get_operand_value(operand)?;
         let accumulator = self.registers.accumulator;
         let carry = 1 - (self.get_status_flag(StatusFlag::CARRY) as u8);
@@ -1066,9 +1079,9 @@ mod unit_tests {
         }
 
         #[test]
-        fn it_executes_returns() {
+        fn it_executes_returns_and_break() {
             let mut state = ComputerState::initialize();
-
+            state.registers.stack_pointer = 0xff;
             state.push_word_to_stack(0xdead);
             state.push_byte_to_stack(0x57);
             state.push_word_to_stack(0xbeef);
@@ -1079,6 +1092,20 @@ mod unit_tests {
             state.execute_operation(Operation::RTI, Operand::Implied).unwrap();
             assert_eq!(state.registers.program_counter, 0xdead);
             assert_eq!(state.registers.status, 0x57);
+
+            state.write_word_to_memory(0xfffe, 0x1234);
+
+            state.registers.status = 0x47;
+            state.registers.program_counter = 0xcafe;
+            state.execute_operation(Operation::BRK, Operand::Implied).unwrap();
+            assert_eq!(state.registers.program_counter, 0x1234);
+            assert_eq!(state.get_word_from_memory(0x1fe), 0xcafe);
+            assert_eq!(state.get_byte_from_memory(0x1fd), 0x47);
+            state.registers.status = 0;
+            state.registers.program_counter = 0;
+            state.execute_operation(Operation::RTI, Operand::Implied).unwrap();
+            assert_eq!(state.registers.program_counter, 0xcafe);
+            assert_eq!(state.registers.status, 0x47);
         }
 
         #[test]
