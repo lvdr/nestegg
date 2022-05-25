@@ -163,6 +163,67 @@ pub fn decode_instruction(instruction: u8) -> Result<Instruction, &'static str> 
     }
 }
 
+pub fn calculate_cycles(instr: &Instruction) -> u8 {
+    match instr.1 {
+        Operation::ADC => 1,
+        Operation::AND => 1,
+        Operation::ASL => 1,
+        Operation::BCC => 1,
+        Operation::BCS => 1,
+        Operation::BEQ => 1,
+        Operation::BIT => 1,
+        Operation::BMI => 1,
+        Operation::BNE => 1,
+        Operation::BPL => 1,
+        Operation::BRK => 1,
+        Operation::BVC => 1,
+        Operation::BVS => 1,
+        Operation::CLC => 1,
+        Operation::CLD => 1,
+        Operation::CLI => 1,
+        Operation::CLV => 1,
+        Operation::CMP => 1,
+        Operation::CPX => 1,
+        Operation::CPY => 1,
+        Operation::DEC => 1,
+        Operation::DEX => 1,
+        Operation::DEY => 1,
+        Operation::EOR => 1,
+        Operation::INC => 1,
+        Operation::INX => 1,
+        Operation::INY => 1,
+        Operation::JMP => 1,
+        Operation::JSR => 1,
+        Operation::LDA => 1,
+        Operation::LDX => 1,
+        Operation::LDY => 1,
+        Operation::LSR => 1,
+        Operation::NOP => 1,
+        Operation::ORA => 1,
+        Operation::PHA => 1,
+        Operation::PHP => 1,
+        Operation::PLA => 1,
+        Operation::PLP => 1,
+        Operation::ROL => 1,
+        Operation::ROR => 1,
+        Operation::RTI => 1,
+        Operation::RTS => 1,
+        Operation::SBC => 1,
+        Operation::SEC => 1,
+        Operation::SED => 1,
+        Operation::SEI => 1,
+        Operation::STA => 1,
+        Operation::STX => 1,
+        Operation::STY => 1,
+        Operation::TAX => 1,
+        Operation::TAY => 1,
+        Operation::TSX => 1,
+        Operation::TXA => 1,
+        Operation::TXS => 1,
+        Operation::TYA => 1
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;

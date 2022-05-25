@@ -3,7 +3,7 @@ use std::vec::Vec;
 mod instruction;
 mod util;
 
-use instruction::decode_instruction;
+use instruction::{decode_instruction, calculate_cycles};
 use instruction::operand_mode::OperandMode;
 use instruction::operation::Operation;
 use util::is_negative;
@@ -36,6 +36,7 @@ pub enum StatusFlag
 pub struct ComputerState {
     pub memory : Vec<u8>,
     pub registers : RegisterFile,
+    pub cycles: u32,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -49,12 +50,19 @@ enum Operand {
 impl ComputerState {
 
     pub fn initialize() -> ComputerState {
-        ComputerState {memory: vec![0; 2usize.pow(16)],
-                       registers: RegisterFile{ ..Default::default()}}
+        ComputerState {
+            memory: vec![0; 2usize.pow(16)],
+            registers: RegisterFile{ ..Default::default()},
+            cycles: 0,
+        }
     }
 
     pub fn initialize_from_image(memory : Vec<u8>) -> ComputerState {
-        ComputerState {memory, registers: RegisterFile{ ..Default::default()}}
+        ComputerState {
+            memory,
+            registers: RegisterFile{ ..Default::default()},
+            cycles: 0
+        }
     }
 
     pub fn get_byte_from_memory(&self, index: usize) -> u8 {
@@ -107,8 +115,9 @@ impl ComputerState {
 
         let decoded_instruction = decode_instruction(instruction)?;
 
-        let operand = self.fetch_operand(decoded_instruction.0);
+        let operand = self.fetch_operand(&decoded_instruction.0);
 
+        self.cycles += calculate_cycles(&decoded_instruction) as u32;
         self.execute_operation(decoded_instruction.1, operand)?;
 
         Ok(self)
@@ -216,7 +225,7 @@ impl ComputerState {
        }
     }
 
-    fn fetch_operand(&mut self, mode : OperandMode) -> Operand {
+    fn fetch_operand(&mut self, mode: &OperandMode) -> Operand {
         match mode {
             OperandMode::Absolute => self.get_absolute_operand(0),
             OperandMode::AbsoluteX => self.get_absolute_operand(self.registers.x),
