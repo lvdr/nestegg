@@ -5,12 +5,15 @@ fn smoketest() {
     let initial_memory = vec![0xEA; 10];
     let expected_memory = initial_memory.clone();
 
-    let final_memory = ComputerState::initialize_from_image(initial_memory)
+    let final_state = ComputerState::initialize_from_image(initial_memory)
         .multiple_steps(10)
-        .unwrap()
-    .memory;
+        .unwrap();
+
+    let final_memory = final_state.memory;
+    let cycles = final_state.cycles;
 
     assert_eq!(final_memory, expected_memory);
+    assert_eq!(cycles, 20);
 }
 
 #[test]
@@ -35,13 +38,16 @@ fn fibonacci_test() {
         0x00];            // tmp
     program.append(&mut padding); // Space for stack
 
-    let final_memory = ComputerState::initialize_from_image(program)
+    let final_state = ComputerState::initialize_from_image(program)
         .multiple_steps(600)
-        .unwrap()
-    .memory;
+        .unwrap();
+
+    let final_memory = final_state.memory;
+    let cycles = final_state.cycles;
 
     let expected = vec![1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233];
     for i in 0..12 {
         assert_eq!(expected[i], final_memory[0x1ff - i]);
     }
+    assert_eq!(cycles, 712);
 }
