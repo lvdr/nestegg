@@ -116,9 +116,13 @@ impl ComputerState {
 
         let decoded_instruction = decode_instruction(instruction)?;
 
-        let operand = self.fetch_operand(&decoded_instruction.0);
+        let (operand, page_boundary_crossed) = self.fetch_operand(&decoded_instruction.0);
 
-        self.cycles += calculate_cycles(&decoded_instruction) as u32;
+        let cycle_cost = calculate_cycles(&decoded_instruction);
+        self.cycles += cycle_cost.cycles as u32;
+        if cycle_cost.page_boundary_costs_extra && page_boundary_crossed {
+            self.cycles += 1
+        }
         self.execute_operation(decoded_instruction.1, operand)?;
 
         Ok(self)
@@ -226,14 +230,17 @@ impl ComputerState {
         }
     }
 
-    fn fetch_operand(&mut self, mode: &OperandMode) -> Operand {
+    /// Fetches and returns the value of the operand
+    /// Also, returns if the page boundary was crossed for AbsoluteX, AbsoluteY, and IndirectY
+    /// OperandModes
+    fn fetch_operand(&mut self, mode: &OperandMode) -> (Operand, bool) {
         match mode {
             OperandMode::Absolute => self.get_absolute_operand(0),
             OperandMode::AbsoluteX => self.get_absolute_operand(self.registers.x),
             OperandMode::AbsoluteY => self.get_absolute_operand(self.registers.y),
-            OperandMode::Accumulator => Operand::Accumulator,
+            OperandMode::Accumulator => (Operand::Accumulator, false),
             OperandMode::Immediate => self.get_immediate_operand(),
-            OperandMode::Implied => Operand::Implied,
+            OperandMode::Implied => (Operand::Implied, false),
             OperandMode::Indirect => self.get_indirect_operand(),
             OperandMode::IndirectX => self.get_indirect_x_operand(),
             OperandMode::IndirectY => self.get_indirect_y_operand(),
@@ -243,48 +250,57 @@ impl ComputerState {
         }
     }
 
-    fn get_absolute_operand(&mut self, offset: u8) -> Operand {
+    /// Fetches absolute operand, adding given offset
+    /// Also returns true if page boundary crossed
+    fn get_absolute_operand(&mut self, offset: u8) -> (Operand, bool) {
         let address = self.get_word_from_memory(self.registers.program_counter as usize) as u16;
+        let operand_value = address + offset as u16;
+        let operand = Operand::Address(operand_value);
+        let page_boundary_crossed = (address & 0xFF00) == (operand_value & 0xFF00);
+
         self.registers.program_counter += 2;
-        Operand::Address(address + offset as u16)
+        (operand, page_boundary_crossed)
     }
 
-    fn get_immediate_operand(&mut self) -> Operand {
+    fn get_immediate_operand(&mut self) -> (Operand, bool) {
         let address = self.registers.program_counter as usize;
         self.registers.program_counter += 1;
-        Operand::Immediate(self.get_byte_from_memory(address))
+        (Operand::Immediate(self.get_byte_from_memory(address)), false)
     }
 
-    fn get_indirect_operand(&mut self) -> Operand {
+    fn get_indirect_operand(&mut self) -> (Operand, bool) {
         let pointer_address =
         self.get_word_from_memory(self.registers.program_counter as usize) as usize;
         let pointer = self.get_word_from_memory(pointer_address) as u16;
         self.registers.program_counter += 2;
-        Operand::Address(pointer)
+        (Operand::Address(pointer), false)
     }
 
-    fn get_indirect_x_operand(&mut self) -> Operand {
+    fn get_indirect_x_operand(&mut self) -> (Operand, bool) {
         let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
         let offset = self.registers.x as usize;
         let pointer_address = (address + offset) & 0xff;
         let pointer = self.get_word_from_memory(pointer_address);
         self.registers.program_counter += 1;
-        Operand::Address(pointer)
+        (Operand::Address(pointer), false)
     }
 
-    fn get_indirect_y_operand(&mut self) -> Operand {
+    fn get_indirect_y_operand(&mut self) -> (Operand, bool) {
         let address = self.get_byte_from_memory(self.registers.program_counter as usize) as usize;
         let pointer = self.get_word_from_memory(address);
         let offset = self.registers.x as u16;
+        let operand_value = pointer + offset;
+        let page_boundary_crossed = (operand_value & 0xFF00) == (pointer & 0xFF);
+
         self.registers.program_counter += 1;
-        Operand::Address(pointer + offset)
+        (Operand::Address(operand_value), page_boundary_crossed)
     }
 
-    fn get_zero_page_operand(&mut self, offset: u8) -> Operand {
+    fn get_zero_page_operand(&mut self, offset: u8) -> (Operand, bool) {
         let address = self.get_byte_from_memory(self.registers.program_counter as usize);
         let final_address = (address + offset) & 0xff;
         self.registers.program_counter += 1;
-        Operand::Address(final_address as u16)
+        (Operand::Address(final_address as u16), false)
     }
 
     fn execute_add_with_carry(&mut self, operand: Operand) -> Result<(), &'static str> {
