@@ -118,7 +118,7 @@ impl ComputerState {
 
         let (operand, page_boundary_crossed) = self.fetch_operand(&decoded_instruction.0);
 
-        let cycle_cost = calculate_cycles(&decoded_instruction);
+        let cycle_cost = calculate_cycles(&decoded_instruction)?;
         self.cycles += cycle_cost.cycles as u32;
         if cycle_cost.page_boundary_costs_extra && page_boundary_crossed {
             self.cycles += 1
