@@ -194,8 +194,8 @@ impl ComputerState {
             Operation::ORA => Ok(self.execute_inclusive_or(operand)?),
             Operation::PHA => Ok(self.push_byte_to_stack(self.registers.accumulator)),
             Operation::PHP => Ok(self.push_byte_to_stack(self.registers.status)),
-            Operation::PLA => Ok(self.execute_pull_accumulator()?), 
-            Operation::PLP => Ok(self.execute_pull_status()?), 
+            Operation::PLA => Ok(self.execute_pull_accumulator()?),
+            Operation::PLP => Ok(self.execute_pull_status()?),
             Operation::ROL => Ok(self.execute_rotate_left(operand)?),
             Operation::ROR => Ok(self.execute_rotate_right(operand)?),
             Operation::RTI => Ok(self.execute_return_from_interrupt()?),
@@ -439,7 +439,7 @@ impl ComputerState {
 
     fn execute_load_accumulator(&mut self, operand: Operand) -> Result<(), &'static str> {
         let operand_value = self.get_operand_value(operand)?;
-        
+
         self.set_zero_and_negative_flags(operand_value);
         self.registers.accumulator = operand_value;
 
@@ -448,7 +448,7 @@ impl ComputerState {
 
     fn execute_load_x(&mut self, operand: Operand) -> Result<(), &'static str> {
         let operand_value = self.get_operand_value(operand)?;
-        
+
         self.set_zero_and_negative_flags(operand_value);
         self.registers.x = operand_value;
 
@@ -457,7 +457,7 @@ impl ComputerState {
 
     fn execute_load_y(&mut self, operand: Operand) -> Result<(), &'static str> {
         let operand_value = self.get_operand_value(operand)?;
-        
+
         self.set_zero_and_negative_flags(operand_value);
         self.registers.y = operand_value;
 
@@ -1032,7 +1032,7 @@ mod unit_tests {
         fn it_executes_pushes_and_pulls() {
             let mut state = ComputerState::initialize();
             state.registers.stack_pointer = 0xff;
-            
+
             state.registers.accumulator = 0x00;
             state.execute_operation(Operation::PHA, Operand::Implied).unwrap();
             assert_eq!(state.get_byte_from_memory(0x1ff), 0x00);
@@ -1139,7 +1139,7 @@ mod unit_tests {
         #[test]
         fn it_executes_transfers() {
             let mut state = ComputerState::initialize();
-            
+
             state.registers.accumulator = 0x11;
             state.execute_operation(Operation::TAX, Operand::Implied).unwrap();
             assert_eq!(state.registers.x, 0x11);
