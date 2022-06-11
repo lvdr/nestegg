@@ -46,3 +46,32 @@ pub fn tokenize<'a>(input: &'a str, token_rules: &Vec<TokenRule>) -> Vec<Token<'
 
     return tokens;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod describe_munch_token {
+        use super::*;
+
+        #[test]
+        fn it_deals_with_static_word_tokens() {
+            let input = "Hello, world!";
+            let regex = Regex::new("Hello").unwrap();
+
+            let (token, rest_of_input) = munch_token(input, &regex).unwrap();
+            assert_eq!(token, "Hello");
+            assert_eq!(rest_of_input, ", world!");
+        }
+
+        #[test]
+        fn it_deals_with_digits() {
+            let input = "475 + 232";
+            let regex = Regex::new(r"\d+").unwrap();
+
+            let (token, rest_of_input) = munch_token(input, &regex).unwrap();
+            assert_eq!(token, "475");
+            assert_eq!(rest_of_input, " + 232");
+        }
+    }
+}
