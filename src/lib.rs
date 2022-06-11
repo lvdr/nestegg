@@ -1,6 +1,7 @@
 use std::vec::Vec;
 
 mod instruction;
+mod token;
 mod util;
 
 use instruction::operand_mode::OperandMode;
