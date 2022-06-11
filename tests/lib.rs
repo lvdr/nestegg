@@ -49,5 +49,5 @@ fn fibonacci_test() {
     for i in 0..12 {
         assert_eq!(expected[i], final_memory[0x1ff - i]);
     }
-    assert_eq!(cycles, 712);
+    assert_eq!(cycles, 1254);
 }

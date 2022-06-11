@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum Operation {
     ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI,
     BNE, BPL, BRK, BVC, BVS, CLC, CLD, CLI,

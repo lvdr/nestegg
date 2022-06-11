@@ -4,6 +4,7 @@ pub mod operation;
 use operand_mode::OperandMode;
 use operation::Operation;
 
+#[derive(Debug)]
 pub struct Instruction(pub OperandMode, pub Operation);
 pub struct CycleCount {
     pub cycles: u8,
@@ -168,170 +169,66 @@ pub fn decode_instruction(instruction: u8) -> Result<Instruction, &'static str> 
 }
 
 // These are from https://www.nesdev.org/wiki/6502_cycle_times
-// Where values are implemented but not present, I've set the
-// cycle cost as 1 (lower than the lowest possible)
-// TODO: Add missing cycle values
+// and http://6502.org/tutorials/6502opcodes.html
 pub fn calculate_cycles(instr: &Instruction) -> Result<CycleCount, &'static str> {
     match instr {
-        Instruction(OperandMode::Immediate,   Operation::ADC) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::ADC) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::ADC) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::ADC) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::ADC) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::ADC) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::IndirectX,   Operation::ADC) => Ok(cycles(6)),
-        Instruction(OperandMode::IndirectY,   Operation::ADC) => Ok(cycles_with_extra_cost(5)),
+        // Most common instruction latency set, includes most arithmetic, logical and memory operations
+        Instruction(opmode,   Operation::ADC | Operation::AND | Operation::BIT |
+                              Operation::CMP | Operation::CPX | Operation::CPY |
+                              Operation::EOR | Operation::LDA | Operation::LDX |
+                              Operation::LDY | Operation::ORA | Operation::SBC |
+                              Operation::STX | Operation::STY) =>
+            match opmode {
+                OperandMode::Immediate => Ok(cycles(2)),
+                OperandMode::ZeroPage  => Ok(cycles(3)),
+                OperandMode::ZeroPageX => Ok(cycles(4)),
+                OperandMode::ZeroPageY => Ok(cycles(4)),
+                OperandMode::Absolute  => Ok(cycles(4)),
+                OperandMode::AbsoluteX => Ok(cycles_with_extra_cost(4)),
+                OperandMode::AbsoluteY => Ok(cycles_with_extra_cost(4)),
+                OperandMode::IndirectX => Ok(cycles(6)),
+                OperandMode::IndirectY => Ok(cycles_with_extra_cost(5)),   
+                _                      => Err("Instruction timings not found")
+            }
 
-        Instruction(OperandMode::Immediate,   Operation::AND) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::AND) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::AND) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::AND) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::AND) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::AND) => Ok(cycles(4)),
-        Instruction(OperandMode::IndirectX,   Operation::AND) => Ok(cycles(6)),
-        Instruction(OperandMode::IndirectY,   Operation::AND) => Ok(cycles(5)),
+        // Memory increment/decrement operations and rotates, shifts
+        Instruction(opmode,   Operation::ASL | Operation::DEC | Operation::INC |
+                              Operation::LSR | Operation::ROL | Operation::ROR) =>
+            match opmode {
+                OperandMode::Accumulator => Ok(cycles(2)),
+                OperandMode::ZeroPage    => Ok(cycles(5)),
+                OperandMode::ZeroPageX   => Ok(cycles(6)),
+                OperandMode::Absolute    => Ok(cycles(6)),
+                OperandMode::AbsoluteX   => Ok(cycles(7)),
+                _                      => Err("Instruction timings not found")
+            }
 
-        Instruction(OperandMode::Accumulator, Operation::ASL) => Ok(cycles(1)),
-        Instruction(OperandMode::ZeroPage,    Operation::ASL) => Ok(cycles(5)),
-        Instruction(OperandMode::ZeroPageX,   Operation::ASL) => Ok(cycles(6)),
-        Instruction(OperandMode::Absolute,    Operation::ASL) => Ok(cycles(6)),
-        Instruction(OperandMode::AbsoluteX,   Operation::ASL) => Ok(cycles(7)),
+        // Branches (TODO: Take and extra cycle if branch is taken)
+        Instruction(OperandMode::Immediate, Operation::BCC | Operation::BCS | Operation::BEQ |
+                                            Operation::BMI | Operation::BNE | Operation::BPL |
+                                            Operation::BVC | Operation::BVS) =>
+                                                Ok(cycles_with_extra_cost(2)),
 
-        Instruction(OperandMode::Immediate,   Operation::BCC) => Ok(cycles(1)),
-        Instruction(OperandMode::Immediate,   Operation::BCS) => Ok(cycles(1)),
-        Instruction(OperandMode::Immediate,   Operation::BEQ) => Ok(cycles(1)),
-
-        Instruction(OperandMode::ZeroPage,    Operation::BIT) => Ok(cycles(3)),
-        Instruction(OperandMode::Absolute,    Operation::BIT) => Ok(cycles(4)),
-
-        Instruction(OperandMode::Immediate,   Operation::BMI) => Ok(cycles(1)),
-        Instruction(OperandMode::Immediate,   Operation::BNE) => Ok(cycles(1)),
-        Instruction(OperandMode::Immediate,   Operation::BPL) => Ok(cycles(1)),
         Instruction(OperandMode::Implied,     Operation::BRK) => Ok(cycles(7)),
-        Instruction(OperandMode::Immediate,   Operation::BVC) => Ok(cycles(1)),
-        Instruction(OperandMode::Immediate,   Operation::BVS) => Ok(cycles(1)),
-        Instruction(OperandMode::Implied,     Operation::CLC) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::CLD) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::CLI) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::CLV) => Ok(cycles(2)),
 
-        Instruction(OperandMode::Immediate,   Operation::CMP) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::CMP) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::CMP) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::CMP) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::CMP) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::CMP) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::IndirectX,   Operation::CMP) => Ok(cycles(6)),
-        Instruction(OperandMode::IndirectY,   Operation::CMP) => Ok(cycles_with_extra_cost(5)),
-
-        Instruction(OperandMode::Immediate,   Operation::CPX) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::CPX) => Ok(cycles(3)),
-        Instruction(OperandMode::Absolute,    Operation::CPX) => Ok(cycles(4)),
-
-        Instruction(OperandMode::Immediate,   Operation::CPY) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::CPY) => Ok(cycles(3)),
-        Instruction(OperandMode::Absolute,    Operation::CPY) => Ok(cycles(4)),
-
-        Instruction(OperandMode::ZeroPage,    Operation::DEC) => Ok(cycles(5)),
-        Instruction(OperandMode::ZeroPageX,   Operation::DEC) => Ok(cycles(6)),
-        Instruction(OperandMode::Absolute,    Operation::DEC) => Ok(cycles(6)),
-        Instruction(OperandMode::AbsoluteX,   Operation::DEC) => Ok(cycles(7)),
-
-        Instruction(OperandMode::Implied,     Operation::DEX) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::DEY) => Ok(cycles(2)),
-
-        Instruction(OperandMode::Immediate,   Operation::EOR) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::EOR) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::EOR) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::EOR) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::EOR) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::EOR) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::IndirectX,   Operation::EOR) => Ok(cycles(6)),
-        Instruction(OperandMode::IndirectY,   Operation::EOR) => Ok(cycles_with_extra_cost(5)),
-
-        Instruction(OperandMode::ZeroPage,    Operation::INC) => Ok(cycles(5)),
-        Instruction(OperandMode::ZeroPageX,   Operation::INC) => Ok(cycles(6)),
-        Instruction(OperandMode::Absolute,    Operation::INC) => Ok(cycles(6)),
-        Instruction(OperandMode::AbsoluteX,   Operation::INC) => Ok(cycles(7)),
-
-        Instruction(OperandMode::Implied,     Operation::INX) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::INY) => Ok(cycles(2)),
+        // Short, implied-operand instructions; set and clear flags, register transfer and
+        // increment/decrement operations
+        Instruction(OperandMode::Implied,     Operation::CLC | Operation::CLD | Operation::CLI |
+                                              Operation::CLV | Operation::DEX | Operation::DEY |
+                                              Operation::INX | Operation::INY | Operation::NOP |
+                                              Operation::SEC | Operation::SED | Operation::SEI |
+                                              Operation::TAX | Operation::TAY | Operation::TSX |
+                                              Operation::TXA | Operation::TXS | Operation::TYA) => Ok(cycles(2)),
 
         Instruction(OperandMode::Absolute,    Operation::JMP) => Ok(cycles(3)),
         Instruction(OperandMode::Indirect,    Operation::JMP) => Ok(cycles(5)),
 
+        // Interrupt / subroutine instructions
         Instruction(OperandMode::Absolute,    Operation::JSR) => Ok(cycles(6)),
+        Instruction(OperandMode::Implied,     Operation::RTI | Operation::RTS) => Ok(cycles(6)),
 
-        Instruction(OperandMode::Immediate,   Operation::LDA) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::LDA) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::LDA) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::LDA) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::LDA) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::LDA) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::IndirectX,   Operation::LDA) => Ok(cycles(6)),
-        Instruction(OperandMode::IndirectY,   Operation::LDA) => Ok(cycles_with_extra_cost(5)),
-
-        Instruction(OperandMode::Immediate,   Operation::LDX) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::LDX) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageY,   Operation::LDX) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::LDX) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::LDX) => Ok(cycles_with_extra_cost(4)),
-
-        Instruction(OperandMode::Immediate,   Operation::LDY) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::LDY) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::LDY) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::LDY) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::LDY) => Ok(cycles_with_extra_cost(4)),
-
-        Instruction(OperandMode::Accumulator, Operation::LSR) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::LSR) => Ok(cycles(5)),
-        Instruction(OperandMode::ZeroPageX,   Operation::LSR) => Ok(cycles(6)),
-        Instruction(OperandMode::Absolute,    Operation::LSR) => Ok(cycles(6)),
-        Instruction(OperandMode::AbsoluteX,   Operation::LSR) => Ok(cycles(7)),
-
-        Instruction(OperandMode::Implied,     Operation::NOP) => Ok(cycles(2)),
-
-        Instruction(OperandMode::Immediate,   Operation::ORA) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::ORA) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::ORA) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::ORA) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::ORA) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::ORA) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::IndirectX,   Operation::ORA) => Ok(cycles(6)),
-        Instruction(OperandMode::IndirectY,   Operation::ORA) => Ok(cycles_with_extra_cost(5)),
-
-        Instruction(OperandMode::Implied,     Operation::PHA) => Ok(cycles(1)),
-        Instruction(OperandMode::Implied,     Operation::PHP) => Ok(cycles(1)),
-        Instruction(OperandMode::Implied,     Operation::PLA) => Ok(cycles(1)),
-        Instruction(OperandMode::Implied,     Operation::PLP) => Ok(cycles(1)),
-
-        Instruction(OperandMode::Accumulator, Operation::ROL) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::ROL) => Ok(cycles(5)),
-        Instruction(OperandMode::ZeroPageX,   Operation::ROL) => Ok(cycles(6)),
-        Instruction(OperandMode::Absolute,    Operation::ROL) => Ok(cycles(6)),
-        Instruction(OperandMode::AbsoluteX,   Operation::ROL) => Ok(cycles(7)),
-
-        Instruction(OperandMode::Accumulator, Operation::ROR) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::ROR) => Ok(cycles(5)),
-        Instruction(OperandMode::ZeroPageX,   Operation::ROR) => Ok(cycles(6)),
-        Instruction(OperandMode::Absolute,    Operation::ROR) => Ok(cycles(6)),
-        Instruction(OperandMode::AbsoluteX,   Operation::ROR) => Ok(cycles(7)),
-
-        Instruction(OperandMode::Implied,     Operation::RTI) => Ok(cycles(6)),
-        Instruction(OperandMode::Implied,     Operation::RTS) => Ok(cycles(6)),
-
-        Instruction(OperandMode::Immediate,   Operation::SBC) => Ok(cycles(2)),
-        Instruction(OperandMode::ZeroPage,    Operation::SBC) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::SBC) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::SBC) => Ok(cycles(4)),
-        Instruction(OperandMode::AbsoluteX,   Operation::SBC) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::AbsoluteY,   Operation::SBC) => Ok(cycles_with_extra_cost(4)),
-        Instruction(OperandMode::IndirectX,   Operation::SBC) => Ok(cycles(6)),
-        Instruction(OperandMode::IndirectY,   Operation::SBC) => Ok(cycles_with_extra_cost(5)),
-
-        Instruction(OperandMode::Implied,     Operation::SEC) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::SED) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::SEI) => Ok(cycles(2)),
+        Instruction(OperandMode::Implied,     Operation::PHA | Operation::PHP) => Ok(cycles(3)),
+        Instruction(OperandMode::Implied,     Operation::PLA | Operation::PLP) => Ok(cycles(4)),
 
         Instruction(OperandMode::ZeroPage,    Operation::STA) => Ok(cycles(3)),
         Instruction(OperandMode::ZeroPageX,   Operation::STA) => Ok(cycles(4)),
@@ -341,20 +238,6 @@ pub fn calculate_cycles(instr: &Instruction) -> Result<CycleCount, &'static str>
         Instruction(OperandMode::IndirectX,   Operation::STA) => Ok(cycles(6)),
         Instruction(OperandMode::IndirectY,   Operation::STA) => Ok(cycles(6)),
 
-        Instruction(OperandMode::ZeroPage,    Operation::STX) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageY,   Operation::STX) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::STX) => Ok(cycles(4)),
-
-        Instruction(OperandMode::ZeroPage,    Operation::STY) => Ok(cycles(3)),
-        Instruction(OperandMode::ZeroPageX,   Operation::STY) => Ok(cycles(4)),
-        Instruction(OperandMode::Absolute,    Operation::STY) => Ok(cycles(4)),
-
-        Instruction(OperandMode::Implied,     Operation::TAX) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::TAY) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::TSX) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::TXA) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::TXS) => Ok(cycles(2)),
-        Instruction(OperandMode::Implied,     Operation::TYA) => Ok(cycles(2)),
         _                                                     => Err("Instruction timings not found")
     }
 }
