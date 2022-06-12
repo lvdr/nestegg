@@ -2,6 +2,7 @@ use std::vec::Vec;
 
 mod instruction;
 mod token;
+mod parser;
 mod util;
 
 use instruction::operand_mode::OperandMode;

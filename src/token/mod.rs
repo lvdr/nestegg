@@ -21,7 +21,6 @@ pub struct TokenRule {
     regex: Regex,
 }
 
-
 #[derive(Debug, PartialEq)]
 pub struct Token<'a> {
     name: &'static str,
