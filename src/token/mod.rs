@@ -21,16 +21,25 @@ pub struct TokenRule {
     regex: Regex,
 }
 
+
+#[derive(Debug, PartialEq)]
 pub struct Token<'a> {
     name: &'static str,
     text: &'a str
 }
 
-pub fn tokenize<'a>(input: &'a str, token_rules: &Vec<TokenRule>) -> Vec<Token<'a>> {
+pub fn tokenize<'a>(input: &'a str, token_rules: &Vec<TokenRule>) -> Result<Vec<Token<'a>>, &'static str> {
     let mut tokens = vec![];
     let mut partially_tokenized_input = input;
 
+    // Trim whitespace at the start
+    partially_tokenized_input = partially_tokenized_input.trim_start();
+
     while partially_tokenized_input.len() > 0 {
+
+        let mut was_any_rule_applicable = false;
+
+        // Apply every token rule and attempt to much them
         for rule in token_rules {
             if let Some((token, rest_of_input)) = munch_token(partially_tokenized_input, &rule.regex) {
                 tokens.push(Token {
@@ -39,12 +48,23 @@ pub fn tokenize<'a>(input: &'a str, token_rules: &Vec<TokenRule>) -> Vec<Token<'
                 });
                 partially_tokenized_input = &rest_of_input[..];
 
+                was_any_rule_applicable = true;
+
                 break;
             }
         }
+
+        // If we get to here in the loop without applying any rule, it means there's an unrecognizable token in
+        // the input. We should just return an error
+        if !was_any_rule_applicable {
+            return Err("Unrecognized token in input");
+        }
+
+        // Trim whitespace at the start
+        partially_tokenized_input = partially_tokenized_input.trim_start();
     }
 
-    return tokens;
+    Ok(tokens)
 }
 
 #[cfg(test)]
@@ -73,5 +93,45 @@ mod tests {
             assert_eq!(token, "475");
             assert_eq!(rest_of_input, " + 232");
         }
+    }
+
+    mod describe_tokenize {
+        use super::*;
+
+        #[test]
+        fn it_can_tokenize_math_expressions() {
+            let input = "678 + 232 / 21";
+            let rules = vec![
+                TokenRule {
+                    name: "Number",
+                    regex: Regex::new(r"\d+").unwrap(),
+                }, TokenRule {
+                    name: "Operator",
+                    regex: Regex::new(r"\+|\-|/|\*").unwrap(),
+                }
+            ];
+
+            let tokens = tokenize(input, &rules).unwrap();
+
+            assert_eq!(tokens, vec![
+                Token {
+                    name: "Number",
+                    text: "678"
+                }, Token {
+                    name: "Operator",
+                    text: "+"
+                }, Token {
+                    name: "Number",
+                    text: "232",
+                }, Token {
+                    name: "Operator",
+                    text: "/",
+                }, Token {
+                    name: "Number",
+                    text: "21",
+                }
+            ])
+        }
+
     }
 }
