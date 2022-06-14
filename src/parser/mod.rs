@@ -14,7 +14,7 @@ pub struct Statement<'a> {
 }
 
 fn munch_label<'a>(tokens: &'a [Token]) -> (&'a [Token<'a>], Option<&'a str>) {
-    if tokens.len() >= 2 && tokens[0].name == "Label" && tokens[1].name == "LabelColon" {
+    if tokens.len() >= 2 && tokens[0].name == "Label" && tokens[1].name == "Colon" {
         (&tokens[2..], Some(tokens[0].text))
     } else {
         (&tokens, None)
@@ -50,3 +50,31 @@ pub fn parse<'a>(tokens: &'a [Token<'a>]) -> Result<Program<'a>, &'static str> {
 
     Ok(Program { statements })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    mod describe_munch_label {
+        use super::*;
+
+
+        #[test]
+        fn it_works_correctly() {
+            let mock_tokens = vec![
+                Token {
+                    name: "Label",
+                    text: "GotoLabel",
+                }, Token {
+                    name: "Colon",
+                    text: ":",
+                },
+            ];
+
+            let (_, label) = munch_label(&mock_tokens);
+
+            assert_eq!(label.unwrap(), "GotoLabel");
+        }
+    }
+}
+
