@@ -23,8 +23,8 @@ pub struct TokenRule {
 
 #[derive(Debug, PartialEq)]
 pub struct Token<'a> {
-    name: &'static str,
-    text: &'a str
+    pub name: &'static str,
+    pub text: &'a str
 }
 
 pub fn tokenize<'a>(input: &'a str, token_rules: &Vec<TokenRule>) -> Result<Vec<Token<'a>>, &'static str> {
