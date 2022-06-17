@@ -13,11 +13,11 @@ pub struct Statement<'a> {
     operand: Option<Operand>,
 }
 
-fn munch_label<'a>(tokens: &'a [Token]) -> (&'a [Token<'a>], Option<&'a str>) {
+fn munch_label<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], &'a str), &'static str> {
     if tokens.len() >= 2 && tokens[0].name == "Label" && tokens[1].name == "Colon" {
-        (&tokens[2..], Some(tokens[0].text))
+        Ok((&tokens[2..], tokens[0].text))
     } else {
-        (&tokens, None)
+        Err("Didn't find a label")
     }
 }
 
@@ -29,13 +29,26 @@ fn munch_operation<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Operatio
     }
 }
 
-fn parse_statement<'a>(tokens: &'a [Token<'a>]) -> Result<(Statement<'a>, &'a [Token<'a>]), &'static str> {
-    let (tokens_without_label, label) = munch_label(tokens);
-    let (tokens_without_operation, operation) = munch_operation(tokens_without_label)?;
+fn parse_statement<'a>(tokens: &'a [Token<'a>]) -> Result<(&'a [Token<'a>], Statement<'a>), &'static str> {
+    let mut curren_tokens = tokens;
 
-    let statement = Statement { label, operation, operand_mode: OperandMode::Absolute, operand: None };
+    let mut label = None;
+    if let Ok(maybe_label) = munch_label(tokens) {
+        label = Some(maybe_label.1);
+        curren_tokens = maybe_label.0;
+    }
 
-    Ok((statement, tokens_without_operation))
+    let (curren_tokens, operation) = munch_operation(curren_tokens)?;
+
+    Ok((
+        curren_tokens,
+        Statement {
+            label,
+            operation,
+            operand_mode: OperandMode::Absolute,
+            operand: None
+        }
+    ))
 }
 
 pub fn parse<'a>(tokens: &'a [Token<'a>]) -> Result<Program<'a>, &'static str> {
@@ -44,8 +57,8 @@ pub fn parse<'a>(tokens: &'a [Token<'a>]) -> Result<Program<'a>, &'static str> {
 
     while mut_tokens.len() > 0 {
         let parsed_statement = parse_statement(mut_tokens)?;
-        mut_tokens = parsed_statement.1;
-        statements.push(parsed_statement.0);
+        mut_tokens = parsed_statement.0;
+        statements.push(parsed_statement.1);
     }
 
     Ok(Program { statements })
@@ -71,9 +84,9 @@ mod test {
                 },
             ];
 
-            let (_, label) = munch_label(&mock_tokens);
+            let (_, label) = munch_label(&mock_tokens).unwrap();
 
-            assert_eq!(label.unwrap(), "GotoLabel");
+            assert_eq!(label, "GotoLabel");
         }
     }
 }
