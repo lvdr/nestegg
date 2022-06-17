@@ -25,7 +25,7 @@ fn munch_operation<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Operatio
     if tokens.len() == 0 {
         Err("Unexpected end of program")
     } else {
-        Ok((&tokens[1..], Operation::from_str(tokens[0].text)?))
+        Ok((&tokens[1..], Operation::from_str(&tokens[0].text.to_uppercase())?))
     }
 }
 
@@ -71,7 +71,6 @@ mod test {
     mod describe_munch_label {
         use super::*;
 
-
         #[test]
         fn it_works_correctly() {
             let mock_tokens = vec![
@@ -85,8 +84,24 @@ mod test {
             ];
 
             let (_, label) = munch_label(&mock_tokens).unwrap();
-
             assert_eq!(label, "GotoLabel");
+        }
+    }
+
+    mod describe_munch_operation {
+        use super::*;
+
+        #[test]
+        fn it_works_correctly() {
+            let mock_tokens = vec![
+                Token {
+                    name: "Text",
+                    text: "adc",
+                },
+            ];
+
+            let (_, op) = munch_operation(&mock_tokens).unwrap();
+            assert_eq!(op, Operation::ADC);
         }
     }
 }
