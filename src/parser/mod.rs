@@ -1,7 +1,6 @@
 use crate::{token::Token, instruction::{operation::Operation, operand_mode::OperandMode}};
 use std::str::FromStr;
 
-
 pub struct Program<'a> {
     statements: Vec<Statement<'a>>,
 }
@@ -15,6 +14,7 @@ pub struct Statement<'a> {
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Number(u16),
+    AbsoluteIndirect(u16),
 }
 
 fn ensure_tokens_available(tokens: &[Token], n: usize) -> Result<(), &'static str> {
@@ -66,11 +66,49 @@ fn parse_hex_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &
     }
 }
 
-fn munch_expression<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Expression), &'static str> {
+fn parse_close_brackets<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], ()), &'static str> {
+    ensure_tokens_available(tokens, 1);
+
+    if tokens[0].name == "CloseBrackets" {
+        Ok((&tokens[1..], ()))
+    } else {
+        Err("Couldn't find close brackets")
+    }
+}
+
+fn parse_open_brackets<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], ()), &'static str> {
+    ensure_tokens_available(tokens, 1);
+
+    if tokens[0].name == "OpenBrackets" {
+        Ok((&tokens[1..], ()))
+    } else {
+        Err("Couldn't find open brackets")
+    }
+}
+
+fn parse_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &'static str> {
     if let Ok((new_tokens, value)) = parse_decimal_number(tokens) {
-        Ok((new_tokens, Expression::Number(value)))
+        Ok((new_tokens, value))
     } else if let Ok((new_tokens, value)) = parse_hex_number(tokens) {
-        Ok((new_tokens, Expression::Number(value)))
+        Ok((new_tokens, value))
+    } else {
+        Err("Didn't find a number")
+    }
+}
+
+fn parse_absolute_indirect_addressing<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &'static str> {
+    let (parsed_tokens, _) = parse_open_brackets(tokens)?;
+    let (parsed_tokens, num) = parse_number(parsed_tokens)?;
+    let (parsed_tokens, _) = parse_close_brackets(parsed_tokens)?;
+
+    Ok((parsed_tokens, num))
+}
+
+fn parse_expression<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Expression), &'static str> {
+    if let Ok((new_tokens, value)) = parse_number(tokens) {
+        Ok((tokens, Expression::Number(value)))
+    } else if let Ok((new_tokens, value)) = parse_absolute_indirect_addressing(tokens) {
+        Ok((tokens, Expression::AbsoluteIndirect(value)))
     } else {
         Err("Didn't find an expression")
     }
@@ -193,7 +231,7 @@ mod test {
                 },
             ];
 
-            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, munch_expression, Expression::Number(5312), 1);
+            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, parse_expression, Expression::Number(5312), 1);
         }
     }
 }
