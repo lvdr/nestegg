@@ -1,4 +1,4 @@
-use crate::{token::{tokenize, Token, self}, instruction::{operation::Operation, operand_mode::OperandMode}, Operand};
+use crate::{token::Token, instruction::{operation::Operation, operand_mode::OperandMode}};
 use std::str::FromStr;
 
 
@@ -9,8 +9,12 @@ pub struct Program<'a> {
 pub struct Statement<'a> {
     label: Option<&'a str>,
     operation: Operation,
-    operand_mode: OperandMode,
-    operand: Option<Operand>,
+    expression: Expression,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Expression {
+    Decimal(u16),
 }
 
 fn munch_label<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], &'a str), &'static str> {
@@ -26,6 +30,23 @@ fn munch_operation<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Operatio
         Err("Unexpected end of program")
     } else {
         Ok((&tokens[1..], Operation::from_str(&tokens[0].text.to_uppercase())?))
+    }
+}
+
+fn munch_expression<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Expression), &'static str> {
+    if tokens.len() >= 1 && tokens[0].name == "Number" {
+        if let Ok(value) = tokens[0].text.parse::<u16>() {
+            Ok((
+                &tokens[1..],
+                Expression::Decimal(value)
+            ))
+        } else {
+                Err("Expected decimal number")
+            }
+    } else if tokens.len() == 0 {
+        Err("Unexpected end of program")
+    } else {
+        Err("Didn't find an expression")
     }
 }
 
@@ -45,8 +66,7 @@ fn parse_statement<'a>(tokens: &'a [Token<'a>]) -> Result<(&'a [Token<'a>], Stat
         Statement {
             label,
             operation,
-            operand_mode: OperandMode::Absolute,
-            operand: None
+            expression: Expression::Decimal(0),
         }
     ))
 }
@@ -104,5 +124,21 @@ mod test {
             assert_eq!(op, Operation::ADC);
         }
     }
-}
 
+    mod describe_munch_expression {
+        use super::*;
+
+        #[test]
+        fn it_works_correctly_for_decimals() {
+            let mock_tokens = vec![
+                Token {
+                    name: "Number",
+                    text: "5312",
+                },
+            ];
+
+            let (_, expr) = munch_expression(&mock_tokens).unwrap();
+            assert_eq!(expr, Expression::Decimal(5312));
+        }
+    }
+}
