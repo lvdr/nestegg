@@ -16,18 +16,18 @@ pub fn munch_token<'a>(input: &'a str, re: &Regex) -> Option<(&'a str, &'a str)>
     }
 }
 
-pub struct TokenRule {
-    name: &'static str,
+pub struct TokenRule<T> {
+    token_type: T,
     regex: Regex,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Token<'a> {
-    pub name: &'static str,
+pub struct Token<'a, T> {
+    pub token_type: T,
     pub text: &'a str
 }
 
-pub fn tokenize<'a>(input: &'a str, token_rules: &Vec<TokenRule>) -> Result<Vec<Token<'a>>, &'static str> {
+pub fn tokenize<'a, T>(input: &'a str, token_rules: &Vec<TokenRule<T>>) -> Result<Vec<Token<'a, T>>, &'static str> {
     let mut tokens = vec![];
     let mut partially_tokenized_input = input;
 
@@ -42,7 +42,7 @@ pub fn tokenize<'a>(input: &'a str, token_rules: &Vec<TokenRule>) -> Result<Vec<
         for rule in token_rules {
             if let Some((token, rest_of_input)) = munch_token(partially_tokenized_input, &rule.regex) {
                 tokens.push(Token {
-                    name: rule.name,
+                    token_type: rule.token_type,
                     text: token
                 });
                 partially_tokenized_input = &rest_of_input[..];
@@ -94,18 +94,24 @@ mod tests {
         }
     }
 
+
     mod describe_tokenize {
         use super::*;
+
+        enum TokenType {
+            Number,
+            Operator,
+        }
 
         #[test]
         fn it_can_tokenize_math_expressions() {
             let input = "678 + 232 / 21";
             let rules = vec![
                 TokenRule {
-                    name: "Number",
+                    token_type: TokenType::Number,
                     regex: Regex::new(r"\d+").unwrap(),
                 }, TokenRule {
-                    name: "Operator",
+                    token_type: TokenType::Operator,
                     regex: Regex::new(r"\+|\-|/|\*").unwrap(),
                 }
             ];
@@ -114,19 +120,19 @@ mod tests {
 
             assert_eq!(tokens, vec![
                 Token {
-                    name: "Number",
+                    token_type: TokenType::Number,
                     text: "678"
                 }, Token {
-                    name: "Operator",
+                    token_type: TokenType::Operator,
                     text: "+"
                 }, Token {
-                    name: "Number",
+                    token_type: TokenType::Number,
                     text: "232",
                 }, Token {
-                    name: "Operator",
+                    token_type: TokenType::Operator,
                     text: "/",
                 }, Token {
-                    name: "Number",
+                    token_type: TokenType::Number,
                     text: "21",
                 }
             ])
