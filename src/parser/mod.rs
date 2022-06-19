@@ -1,5 +1,15 @@
-use crate::{token::Token, instruction::{operation::Operation, operand_mode::OperandMode}};
+use crate::{token::Token, instruction::operation::Operation};
 use std::str::FromStr;
+
+#[derive(Debug, PartialEq)]
+pub enum AssemblyTokensType {
+    Text,
+    Colon,
+    Number,
+    Hex,
+    OpenBrackets,
+    CloseBrackets,
+}
 
 pub struct Program<'a> {
     statements: Vec<Statement<'a>>,
@@ -17,7 +27,10 @@ pub enum Expression {
     AbsoluteIndirect(u16),
 }
 
-fn ensure_tokens_available(tokens: &[Token], n: usize) -> Result<(), &'static str> {
+pub type TokenList<'a> = &'a [Token<'a, AssemblyTokensType>];
+pub type ParserResult<'a, ParsedType> = Result<(TokenList<'a>, ParsedType), &'static str>;
+
+fn ensure_tokens_available<'a, T>(tokens: &'a [Token<'a, T>], n: usize) -> Result<(), &'static str>{
     if tokens.len() < n {
         Err("Unexpected end of program")
     } else {
@@ -25,24 +38,24 @@ fn ensure_tokens_available(tokens: &[Token], n: usize) -> Result<(), &'static st
     }
 }
 
-fn munch_label<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], &'a str), &'static str> {
+fn parse_label<'a>(tokens: TokenList<'a>) -> ParserResult<'a, &'a str> {
     ensure_tokens_available(tokens, 2)?;
 
     match tokens {
-        [Token {name: "Label", ..}, Token {name: "Colon", ..}] =>
+        [Token {token_type: AssemblyTokensType::Text, ..}, Token {token_type: AssemblyTokensType::Colon, ..}] =>
             Ok((&tokens[2..], tokens[0].text)),
         _ =>
             Err("Didn't find a label"),
     }
 }
 
-fn munch_operation<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Operation), &'static str> {
+fn parse_operation<'a>(tokens: TokenList<'a>) -> ParserResult<'a, Operation> {
     ensure_tokens_available(tokens, 1)?;
     Ok((&tokens[1..], Operation::from_str(&tokens[0].text.to_uppercase())?))
 }
 
 
-fn parse_decimal_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &'static str> {
+fn parse_decimal_number<'a>(tokens: TokenList<'a>) -> ParserResult<'a, u16>{
     ensure_tokens_available(tokens, 1);
 
     if let Ok(value) = tokens[0].text.parse::<u16>() {
@@ -52,10 +65,10 @@ fn parse_decimal_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16
     }
 }
 
-fn parse_hex_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &'static str> {
+fn parse_hex_number<'a>(tokens: TokenList<'a>) -> ParserResult<'a, u16> {
     ensure_tokens_available(tokens, 2);
 
-    if tokens[0].name == "Hex" {
+    if tokens[0].token_type == AssemblyTokensType::Hex {
         if let Ok(value) = u16::from_str_radix(tokens[1].text, 16) {
             Ok((&tokens[2..], value))
         } else {
@@ -66,27 +79,27 @@ fn parse_hex_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &
     }
 }
 
-fn parse_close_brackets<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], ()), &'static str> {
+fn parse_close_brackets<'a>(tokens: TokenList<'a>) -> ParserResult<'a, ()> {
     ensure_tokens_available(tokens, 1);
 
-    if tokens[0].name == "CloseBrackets" {
+    if tokens[0].token_type == AssemblyTokensType::CloseBrackets {
         Ok((&tokens[1..], ()))
     } else {
         Err("Couldn't find close brackets")
     }
 }
 
-fn parse_open_brackets<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], ()), &'static str> {
+fn parse_open_brackets<'a>(tokens: TokenList<'a>) -> ParserResult<'a, ()> {
     ensure_tokens_available(tokens, 1);
 
-    if tokens[0].name == "OpenBrackets" {
+    if tokens[0].token_type == AssemblyTokensType::OpenBrackets {
         Ok((&tokens[1..], ()))
     } else {
         Err("Couldn't find open brackets")
     }
 }
 
-fn parse_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &'static str> {
+fn parse_number<'a>(tokens: TokenList<'a>) -> ParserResult<u16> {
     if let Ok((new_tokens, value)) = parse_decimal_number(tokens) {
         Ok((new_tokens, value))
     } else if let Ok((new_tokens, value)) = parse_hex_number(tokens) {
@@ -96,7 +109,7 @@ fn parse_number<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &'sta
     }
 }
 
-fn parse_absolute_indirect_addressing<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], u16), &'static str> {
+fn parse_absolute_indirect_addressing<'a>(tokens: TokenList<'a>) -> ParserResult<u16> {
     let (parsed_tokens, _) = parse_open_brackets(tokens)?;
     let (parsed_tokens, num) = parse_number(parsed_tokens)?;
     let (parsed_tokens, _) = parse_close_brackets(parsed_tokens)?;
@@ -104,26 +117,26 @@ fn parse_absolute_indirect_addressing<'a>(tokens: &'a [Token]) -> Result<(&'a [T
     Ok((parsed_tokens, num))
 }
 
-fn parse_expression<'a>(tokens: &'a [Token]) -> Result<(&'a [Token<'a>], Expression), &'static str> {
+fn parse_expression<'a>(tokens: TokenList<'a>) -> Result<(TokenList<'a>, Expression), &'static str> {
     if let Ok((new_tokens, value)) = parse_number(tokens) {
-        Ok((tokens, Expression::Number(value)))
+        Ok((new_tokens, Expression::Number(value)))
     } else if let Ok((new_tokens, value)) = parse_absolute_indirect_addressing(tokens) {
-        Ok((tokens, Expression::AbsoluteIndirect(value)))
+        Ok((new_tokens, Expression::AbsoluteIndirect(value)))
     } else {
         Err("Didn't find an expression")
     }
 }
 
-fn parse_statement<'a>(tokens: &'a [Token<'a>]) -> Result<(&'a [Token<'a>], Statement<'a>), &'static str> {
+fn parse_statement<'a>(tokens: TokenList<'a>) -> Result<(TokenList<'a>, Statement<'a>), &'static str> {
     let mut curren_tokens = tokens;
 
     let mut label = None;
-    if let Ok(maybe_label) = munch_label(tokens) {
+    if let Ok(maybe_label) = parse_label(tokens) {
         label = Some(maybe_label.1);
         curren_tokens = maybe_label.0;
     }
 
-    let (curren_tokens, operation) = munch_operation(curren_tokens)?;
+    let (curren_tokens, operation) = parse_operation(curren_tokens)?;
 
     Ok((
         curren_tokens,
@@ -135,7 +148,7 @@ fn parse_statement<'a>(tokens: &'a [Token<'a>]) -> Result<(&'a [Token<'a>], Stat
     ))
 }
 
-pub fn parse<'a>(tokens: &'a [Token<'a>]) -> Result<Program<'a>, &'static str> {
+pub fn parse<'a>(tokens: TokenList<'a>) -> Result<Program<'a>, &'static str> {
     let mut mut_tokens = tokens;
     let mut statements = vec![];
 
@@ -157,8 +170,8 @@ mod test {
     /// Asserts that `parser(tokens)` returns `expected_value` and consumes
     /// `expected_consumed_tokens` values from `tokens`
     fn assert_parsing_tokens_with_func_gives_and_consumes<'a, T: PartialEq + Debug, E: Debug>(
-        tokens: &'a [Token],
-        parser: fn (&'a [Token]) -> Result<(&'a [Token<'a>], T), E>,
+        tokens: TokenList<'a>,
+        parser: fn (TokenList<'a>) -> Result<(TokenList<'a>, T), E>,
         expected_value: T,
         expected_consumed_tokens: usize
     ) {
@@ -174,15 +187,15 @@ mod test {
         fn it_works_correctly() {
             let mock_tokens = vec![
                 Token {
-                    name: "Label",
+                    token_type: AssemblyTokensType::Text,
                     text: "GotoLabel",
                 }, Token {
-                    name: "Colon",
+                    token_type: AssemblyTokensType::Colon,
                     text: ":",
                 },
             ];
 
-            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, munch_label, "GotoLabel", 2);
+            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, parse_label, "GotoLabel", 2);
         }
     }
 
@@ -193,12 +206,12 @@ mod test {
         fn it_works_correctly() {
             let mock_tokens = vec![
                 Token {
-                    name: "Text",
+                    token_type: AssemblyTokensType::Text,
                     text: "adc",
                 },
             ];
 
-            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, munch_operation, Operation::ADC, 1);
+            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, parse_operation, Operation::ADC, 1);
         }
     }
 
@@ -212,7 +225,7 @@ mod test {
             fn it_works_correctly() {
                 let mock_tokens = vec![
                     Token {
-                        name: "Number",
+                        token_type: AssemblyTokensType::Number,
                         text: "5312",
                     },
                 ];
@@ -226,7 +239,7 @@ mod test {
         fn it_works_correctly_for_decimal_numbers() {
             let mock_tokens = vec![
                 Token {
-                    name: "Number",
+                    token_type: AssemblyTokensType::Number,
                     text: "5312",
                 },
             ];
