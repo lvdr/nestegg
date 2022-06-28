@@ -15,10 +15,12 @@ pub enum AssemblyTokensType {
     Y,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Program<'a> {
     statements: Vec<Statement<'a>>,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Statement<'a> {
     label: Option<&'a str>,
     operation: Operation,
@@ -68,7 +70,7 @@ fn parse_operation<'a>(tokens: TokenList<'a>) -> ParserResult<'a, Operation> {
 
 
 fn parse_decimal_number<'a>(tokens: TokenList<'a>) -> ParserResult<'a, u16>{
-    ensure_tokens_available(tokens, 1);
+    ensure_tokens_available(tokens, 1)?;
 
     if let Ok(value) = tokens[0].text.parse::<u16>() {
         Ok((&tokens[1..], value))
@@ -78,7 +80,7 @@ fn parse_decimal_number<'a>(tokens: TokenList<'a>) -> ParserResult<'a, u16>{
 }
 
 fn parse_hex_number<'a>(tokens: TokenList<'a>) -> ParserResult<'a, u16> {
-    ensure_tokens_available(tokens, 2);
+    ensure_tokens_available(tokens, 2)?;
 
     if tokens[0].token_type == AssemblyTokensType::Hex {
         if let Ok(value) = u16::from_str_radix(tokens[1].text, 16) {
@@ -92,10 +94,10 @@ fn parse_hex_number<'a>(tokens: TokenList<'a>) -> ParserResult<'a, u16> {
 }
 
 fn parse_hash<'a>(tokens: TokenList<'a>) -> ParserResult<()> {
-    ensure_tokens_available(tokens, 1);
+    ensure_tokens_available(tokens, 1)?;
 
     match tokens {
-        [Token {token_type: AssemblyTokensType::Hash, ..}] =>
+        [Token {token_type: AssemblyTokensType::Hash, text: "#"}, ..] =>
             Ok((&tokens[1..], ())),
         _ =>
             Err("Didn't find #"),
@@ -103,10 +105,10 @@ fn parse_hash<'a>(tokens: TokenList<'a>) -> ParserResult<()> {
 }
 
 fn parse_y<'a>(tokens: TokenList<'a>) -> ParserResult<()> {
-    ensure_tokens_available(tokens, 1);
+    ensure_tokens_available(tokens, 1)?;
 
     match tokens {
-        [Token {token_type: AssemblyTokensType::Y, ..}] =>
+        [Token {token_type: AssemblyTokensType::Y, ..}, ..] =>
             Ok((&tokens[1..], ())),
         _ =>
             Err("Didn't find Y"),
@@ -117,7 +119,7 @@ fn parse_x<'a>(tokens: TokenList<'a>) -> ParserResult<()> {
     ensure_tokens_available(tokens, 1);
 
     match tokens {
-        [Token {token_type: AssemblyTokensType::X, ..}] =>
+        [Token {token_type: AssemblyTokensType::X, ..}, ..] =>
             Ok((&tokens[1..], ())),
         _ =>
             Err("Didn't find X"),
@@ -125,10 +127,10 @@ fn parse_x<'a>(tokens: TokenList<'a>) -> ParserResult<()> {
 }
 
 fn parse_comma<'a>(tokens: TokenList<'a>) -> ParserResult<()> {
-    ensure_tokens_available(tokens, 1);
+    ensure_tokens_available(tokens, 1)?;
 
     match tokens {
-        [Token {token_type: AssemblyTokensType::Comma, ..}] =>
+        [Token {token_type: AssemblyTokensType::Comma, ..}, ..] =>
             Ok((&tokens[1..], ())),
         _ =>
             Err("Didn't find X"),
@@ -136,7 +138,7 @@ fn parse_comma<'a>(tokens: TokenList<'a>) -> ParserResult<()> {
 }
 
 fn parse_close_brackets<'a>(tokens: TokenList<'a>) -> ParserResult<'a, ()> {
-    ensure_tokens_available(tokens, 1);
+    ensure_tokens_available(tokens, 1)?;
 
     if tokens[0].token_type == AssemblyTokensType::CloseBrackets {
         Ok((&tokens[1..], ()))
@@ -146,7 +148,7 @@ fn parse_close_brackets<'a>(tokens: TokenList<'a>) -> ParserResult<'a, ()> {
 }
 
 fn parse_open_brackets<'a>(tokens: TokenList<'a>) -> ParserResult<'a, ()> {
-    ensure_tokens_available(tokens, 1);
+    ensure_tokens_available(tokens, 1)?;
 
     if tokens[0].token_type == AssemblyTokensType::OpenBrackets {
         Ok((&tokens[1..], ()))
@@ -284,13 +286,14 @@ fn parse_statement<'a>(tokens: TokenList<'a>) -> Result<(TokenList<'a>, Statemen
     }
 
     let (curren_tokens, operation) = parse_operation(curren_tokens)?;
+    let (curren_tokens, expression) = parse_expression(curren_tokens)?;
 
     Ok((
         curren_tokens,
         Statement {
             label,
             operation,
-            expression: Expression::Number(0),
+            expression,
         }
     ))
 }
@@ -365,6 +368,25 @@ mod test {
     mod describe_munch_expression {
         use super::*;
 
+        mod describe_parse_immediate_addressing {
+            use super::*;
+
+            #[test]
+            fn it_works_correctly() {
+                let mock_tokens = vec![
+                    Token {
+                        token_type: AssemblyTokensType::Hash,
+                        text: "#",
+                    }, Token {
+                        token_type: AssemblyTokensType::Number,
+                        text: "5312",
+                    },
+                ];
+
+                assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, parse_immediate_addressing, 5312, 2);
+            }
+        }
+
         mod describe_parse_decimal_number {
             use super::*;
 
@@ -380,18 +402,31 @@ mod test {
                 assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, parse_decimal_number, 5312, 1);
             }
         }
+    }
 
+    mod describe_parse_statement {
+        use super::*;
 
         #[test]
-        fn it_works_correctly_for_decimal_numbers() {
+        fn it_parses_simple_expressions() {
             let mock_tokens = vec![
                 Token {
+                    token_type: AssemblyTokensType::Text,
+                    text: "and",
+                }, Token {
+                    token_type: AssemblyTokensType::Hash,
+                    text: "#",
+                }, Token {
                     token_type: AssemblyTokensType::Number,
-                    text: "5312",
+                    text: "200",
                 },
             ];
 
-            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, parse_expression, Expression::Number(5312), 1);
+            assert_parsing_tokens_with_func_gives_and_consumes(&mock_tokens, parse_statement, Statement {
+                label: None,
+                operation: Operation::AND,
+                expression: Expression::Immediate(200),
+            }, 3);
         }
     }
 }

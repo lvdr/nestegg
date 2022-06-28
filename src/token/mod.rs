@@ -16,7 +16,8 @@ pub fn munch_token<'a>(input: &'a str, re: &Regex) -> Option<(&'a str, &'a str)>
     }
 }
 
-pub struct TokenRule<T> {
+
+pub struct TokenRule<T: Copy> {
     token_type: T,
     regex: Regex,
 }
@@ -27,7 +28,7 @@ pub struct Token<'a, T> {
     pub text: &'a str
 }
 
-pub fn tokenize<'a, T>(input: &'a str, token_rules: &Vec<TokenRule<T>>) -> Result<Vec<Token<'a, T>>, &'static str> {
+pub fn tokenize<'a, T: Copy>(input: &'a str, token_rules: &Vec<TokenRule<T>>) -> Result<Vec<Token<'a, T>>, &'static str> {
     let mut tokens = vec![];
     let mut partially_tokenized_input = input;
 
@@ -98,6 +99,8 @@ mod tests {
     mod describe_tokenize {
         use super::*;
 
+
+        #[derive(Debug, Copy, Clone, PartialEq)]
         enum TokenType {
             Number,
             Operator,
