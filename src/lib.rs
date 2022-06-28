@@ -1713,5 +1713,15 @@ mod unit_tests {
             state = state.step().unwrap();
             assert_eq!(state.registers.program_counter, 7);
         }
+
+        #[test]
+        fn all_valid_opcodes_have_known_latency() {
+            for i in 0..255 {
+                match decode_instruction(i) {
+                    Ok(ins) => assert!(calculate_cycles(&ins).is_ok()),
+                    Err(_)  => (),
+                }
+            }
+        }
     }
 }
