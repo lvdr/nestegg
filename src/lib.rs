@@ -7,7 +7,7 @@ mod util;
 
 use instruction::operand_mode::OperandMode;
 use instruction::operation::Operation;
-use instruction::{calculate_cycles, decode_instruction};
+use instruction::{calculate_cycles, bytecode_to_instruction};
 use util::is_negative;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
@@ -116,7 +116,7 @@ impl ComputerState {
         let instruction = self.memory[self.registers.program_counter as usize];
         self.registers.program_counter += 1;
 
-        let decoded_instruction = decode_instruction(instruction)?;
+        let decoded_instruction = bytecode_to_instruction(instruction)?;
 
         let (operand, page_boundary_crossed) = self.fetch_operand(&decoded_instruction.0);
 
